@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://unpkg.com/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+<style>
+  :root{
+    --cj-bg:#0A0A0B; --cj-bg2:#0D1117; --cj-accent:#39D353; --cj-cyan:#58A6FF;
+    --cj-slate:#30363D; --cj-text:#E6EDF3; --cj-dim:#7D8590;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:linear-gradient(180deg,#0D1117 0%, #0A0A0B 55%, #07070A 100%);
+    background-attachment:fixed;
+    color:var(--cj-text);
+    font-family:"Space Grotesk", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{ background:var(--cj-accent); color:#04130a; }
+  ::-webkit-scrollbar{ width:9px; }
+  ::-webkit-scrollbar-track{ background:#0a0a0b; }
+  ::-webkit-scrollbar-thumb{ background:#21262d; border-radius:9px; }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--cj-slate); }
+  @keyframes cjBlink{ 0%,49%{opacity:1} 50%,100%{opacity:0} }
+  @keyframes cjBounce{ 0%,100%{ transform:translateY(0); opacity:.5 } 50%{ transform:translateY(7px); opacity:1 } }
+  @keyframes cjFloat{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
+  @keyframes cjGrain{ 0%{transform:translate(0,0)} 10%{transform:translate(-3%,-4%)} 30%{transform:translate(2%,-2%)} 50%{transform:translate(-2%,3%)} 70%{transform:translate(3%,2%)} 90%{transform:translate(-1%,-3%)} 100%{transform:translate(0,0)} }
+</style>
+</helmet>
+<div id="cj-app" style="position:relative; width:100%; min-height:100vh;">
+
+  <!-- ===== 3D STAGE (Three.js renderer mounts here) ===== -->
+  <div id="cj-stage" style="position:fixed; inset:0; z-index:0;"></div>
+
+  <!-- cinematic vignette + film grain (CSS, cheap & reliable) -->
+  <div id="cj-vignette" style="position:fixed; inset:0; z-index:40; pointer-events:none; background:radial-gradient(120% 90% at 50% 42%, transparent 48%, rgba(4,4,8,.55) 86%, rgba(2,2,5,.9) 100%);"></div>
+  <div id="cj-grain" style="position:fixed; inset:-50%; z-index:41; pointer-events:none; opacity:.05; mix-blend-mode:overlay; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>'); animation:cjGrain 8s steps(6) infinite;"></div>
+
+  <!-- top scroll progress -->
+  <div style="position:fixed; top:0; left:0; right:0; height:2px; z-index:55; background:rgba(255,255,255,.04);">
+    <div id="cj-progress" style="height:100%; width:0%; background:linear-gradient(90deg,var(--cj-cyan),var(--cj-accent)); box-shadow:0 0 12px var(--cj-accent);"></div>
+  </div>
+
+  <!-- ===== NAV ===== -->
+  <nav style="position:fixed; top:0; left:0; right:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:22px 30px; pointer-events:none;">
+    <a href="https://github.com/parthdagia05" target="_blank" rel="noopener" style="pointer-events:auto; text-decoration:none; display:flex; align-items:baseline; gap:12px;">
+      <span style="font-weight:600; font-size:15px; letter-spacing:.14em; color:var(--cj-text);">PARTH DAGIA</span>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim);">@parthdagia05</span>
+    </a>
+    <div style="display:flex; align-items:center; gap:18px; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.08em;">
+      <span id="cj-branch-label" style="color:var(--cj-dim);">git:(<span style="color:var(--cj-accent);">main</span>)</span>
+      <div style="display:flex; align-items:center; gap:7px;">
+        <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--cj-accent); box-shadow:0 0 8px var(--cj-accent); animation:cjFloat 3s ease-in-out infinite;"></span>
+        <span style="color:var(--cj-dim);">HEAD</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- 3D node hover tooltip -->
+  <div id="cj-tooltip" style="position:fixed; top:0; left:0; z-index:60; pointer-events:none; opacity:0; transition:opacity .18s ease; will-change:transform; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-text); background:rgba(13,17,23,.92); border:1px solid var(--cj-slate); border-radius:7px; padding:8px 12px; box-shadow:0 8px 30px rgba(0,0,0,.5); backdrop-filter:blur(6px); white-space:nowrap;">
+    <span style="color:var(--cj-accent); margin-right:6px;">●</span><span data-tip-title>node</span>
+  </div>
+
+  <!-- ===== SCROLLING OVERLAY CONTENT (drives scroll height) ===== -->
+  <main id="cj-root" style="position:relative; z-index:10;">
+
+    <!-- 01 · HERO / git init -->
+    <section class="cj-section" data-screen-label="Hero" style="position:relative; min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:0 8vw; pointer-events:none;">
+      <div data-reveal style="max-width:760px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--cj-dim); margin-bottom:26px; letter-spacing:.04em;">
+          <span style="color:var(--cj-accent);">$</span> git init <span style="color:#4d5560;">~/parth</span><span style="display:inline-block; width:8px; height:15px; background:var(--cj-accent); margin-left:4px; vertical-align:-2px; animation:cjBlink 1.1s step-end infinite;"></span>
+        </div>
+        <h1 style="margin:0; font-weight:600; font-size:clamp(44px,7.4vw,104px); line-height:.98; letter-spacing:-.03em;">
+          Parth Dagia
+        </h1>
+        <p style="margin:22px 0 0; font-size:clamp(19px,2.5vw,30px); font-weight:400; line-height:1.32; color:var(--cj-text); max-width:620px;">
+          Ethereum core-dev in training.<br><span style="color:var(--cj-accent);">I build in public.</span>
+        </p>
+        <p style="margin:18px 0 0; font-family:'JetBrains Mono',monospace; font-size:13.5px; color:var(--cj-dim); line-height:1.7; max-width:560px;">
+          Open-source engineer — 55+ PRs merged across Sugar Labs &amp; OSeMOSYS. Scroll the commit history.
+        </p>
+      </div>
+      <div style="position:absolute; bottom:34px; left:8vw; display:flex; align-items:center; gap:12px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim);">
+        <span>scroll to traverse</span>
+        <span style="display:inline-flex; flex-direction:column; gap:2px;">
+          <span style="display:block; width:1px; height:16px; background:var(--cj-dim); margin:0 auto; animation:cjBounce 1.6s ease-in-out infinite;"></span>
+        </span>
+      </div>
+    </section>
+
+    <!-- 02 · ABOUT / the trunk -->
+    <section class="cj-section" data-screen-label="About" style="position:relative; min-height:120vh; display:flex; align-items:center; padding:0 8vw; pointer-events:none;">
+      <div data-reveal style="max-width:600px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--cj-accent); margin-bottom:20px;">// THE_TRUNK</div>
+        <h2 style="margin:0 0 22px; font-weight:500; font-size:clamp(26px,3.4vw,40px); line-height:1.15; letter-spacing:-.02em; max-width:520px;">
+          A history of small, consistent commits — compounding into systems people rely on.
+        </h2>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; line-height:2.15; color:var(--cj-dim); border-left:1px solid var(--cj-slate); padding-left:20px;">
+          <div><span style="color:#586069;">location  </span><span style="color:var(--cj-text);">Bengaluru, India</span></div>
+          <div><span style="color:#586069;">studying  </span><span style="color:var(--cj-text);">CS · BITS Pilani</span></div>
+          <div><span style="color:#586069;">focus     </span><span style="color:var(--cj-text);">protocols · backend · AI tooling</span></div>
+          <div><span style="color:#586069;">languages </span><span style="color:var(--cj-cyan);">TypeScript Python Solidity Rust</span></div>
+          <div><span style="color:#586069;">orgs      </span><span style="color:var(--cj-text);">Sugar Labs · OSeMOSYS</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 · PROJECTS / merge points -->
+    <section class="cj-section" data-screen-label="Projects" style="position:relative; min-height:400vh; pointer-events:none;">
+      <div style="position:absolute; top:40px; left:8vw; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--cj-accent);">// MERGE_POINTS</div>
+
+      <!-- each project occupies a 100vh slab; alternates side -->
+      <article class="cj-project" data-reveal style="position:absolute; top:0; height:100vh; left:0; right:0; display:flex; align-items:center; padding:0 8vw; justify-content:flex-start;">
+        <div style="max-width:430px; pointer-events:auto;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim); margin-bottom:14px;">commit <span style="color:var(--cj-accent);">a1f9c0</span> · merge branch <span style="color:var(--cj-cyan);">'block-builder'</span></div>
+          <h3 style="margin:0 0 6px; font-size:clamp(26px,3.2vw,38px); font-weight:600; letter-spacing:-.02em;">block-based-program-builder</h3>
+          <div style="display:flex; gap:16px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-bottom:16px;">
+            <span><span style="color:#e3b341;">●</span> TypeScript</span><span>★ 12</span><span>⑂ 4</span>
+          </div>
+          <p style="margin:0 0 18px; font-size:16px; line-height:1.6; color:#c9d1d9;">A structured program builder inspired by Music Blocks v4 — block-based syntax modeling, validation, and execution.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">TypeScript</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Vite</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Vitest</span>
+          </div>
+          <a href="https://github.com/parthdagia05/block-based-program-builder" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:9px 16px; border-radius:6px;">view source <span style="color:var(--cj-accent);">→</span></a>
+        </div>
+      </article>
+
+      <article class="cj-project" data-reveal style="position:absolute; top:100vh; height:100vh; left:0; right:0; display:flex; align-items:center; padding:0 8vw; justify-content:flex-start;">
+        <div style="max-width:430px; pointer-events:auto;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim); margin-bottom:14px;">commit <span style="color:var(--cj-accent);">7b22de</span> · merge branch <span style="color:var(--cj-cyan);">'clearpath'</span></div>
+          <h3 style="margin:0 0 6px; font-size:clamp(26px,3.2vw,38px); font-weight:600; letter-spacing:-.02em;">clearpath-rag</h3>
+          <div style="display:flex; gap:16px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-bottom:16px;">
+            <span><span style="color:#e3b341;">●</span> TypeScript</span><span>★ 8</span><span>⑂ 2</span>
+          </div>
+          <p style="margin:0 0 18px; font-size:16px; line-height:1.6; color:#c9d1d9;">A retrieval-augmented-generation pipeline for grounded, source-cited answers over private document sets.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">TypeScript</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Node</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">LLM / RAG</span>
+          </div>
+          <a href="https://github.com/parthdagia05/clearpath-rag" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:9px 16px; border-radius:6px;">view source <span style="color:var(--cj-accent);">→</span></a>
+        </div>
+      </article>
+
+      <article class="cj-project" data-reveal style="position:absolute; top:200vh; height:100vh; left:0; right:0; display:flex; align-items:center; padding:0 8vw; justify-content:flex-start;">
+        <div style="max-width:430px; pointer-events:auto;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim); margin-bottom:14px;">commit <span style="color:var(--cj-accent);">c40a1e</span> · upstream <span style="color:var(--cj-cyan);">'sugarlabs/musicblocks'</span></div>
+          <h3 style="margin:0 0 6px; font-size:clamp(26px,3.2vw,38px); font-weight:600; letter-spacing:-.02em;">Music Blocks · Sugar Labs</h3>
+          <div style="display:flex; gap:16px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-bottom:16px;">
+            <span><span style="color:#f1e05a;">●</span> JavaScript</span><span>35+ PRs merged</span>
+          </div>
+          <p style="margin:0 0 18px; font-size:16px; line-height:1.6; color:#c9d1d9;">Core contributor to Music Blocks — a visual programming environment for music &amp; math used in classrooms worldwide.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">JavaScript</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Open Source</span>
+          </div>
+          <a href="https://github.com/sugarlabs/musicblocks" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:9px 16px; border-radius:6px;">view source <span style="color:var(--cj-accent);">→</span></a>
+        </div>
+      </article>
+
+      <article class="cj-project" data-reveal style="position:absolute; top:300vh; height:100vh; left:0; right:0; display:flex; align-items:center; padding:0 8vw; justify-content:flex-start;">
+        <div style="max-width:430px; pointer-events:auto;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim); margin-bottom:14px;">commit <span style="color:var(--cj-accent);">e91f7a</span> · upstream <span style="color:var(--cj-cyan);">'OSeMOSYS / MUIOGO'</span></div>
+          <h3 style="margin:0 0 6px; font-size:clamp(26px,3.2vw,38px); font-weight:600; letter-spacing:-.02em;">OSeMOSYS · MUIOGO</h3>
+          <div style="display:flex; gap:16px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-bottom:16px;">
+            <span><span style="color:#3572A5;">●</span> Python</span><span>20+ PRs merged</span>
+          </div>
+          <p style="margin:0 0 18px; font-size:16px; line-height:1.6; color:#c9d1d9;">Contributions to the open-source energy modelling system — multi-region optimization tooling for long-term planning.</p>
+          <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:22px;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Python</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-cyan); border:1px solid #1f3b54; background:rgba(88,166,255,.07); padding:4px 10px; border-radius:20px;">Optimization</span>
+          </div>
+          <a href="https://github.com/OSeMOSYS" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:8px; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:9px 16px; border-radius:6px;">view source <span style="color:var(--cj-accent);">→</span></a>
+        </div>
+      </article>
+    </section>
+
+    <!-- 04 · CONTRIBUTION SKYLINE -->
+    <section class="cj-section" data-screen-label="Skyline" style="position:relative; min-height:130vh; display:flex; align-items:center; padding:0 8vw; pointer-events:none;">
+      <div data-reveal style="max-width:520px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--cj-accent); margin-bottom:20px;">// THE_SKYLINE</div>
+        <h2 style="margin:0 0 18px; font-weight:500; font-size:clamp(26px,3.4vw,42px); line-height:1.12; letter-spacing:-.02em;">Consistency, extruded.</h2>
+        <p style="margin:0; font-size:16px; line-height:1.65; color:#c9d1d9; max-width:440px;">A year of contributions, rebuilt as a rotating city. Each bar is a day; the taller and greener, the busier. Hover the skyline to read a day.</p>
+        <div style="display:flex; gap:8px; margin-top:24px; align-items:center; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim);">
+          <span>less</span>
+          <span style="width:11px; height:11px; border-radius:2px; background:#0e2a16;"></span>
+          <span style="width:11px; height:11px; border-radius:2px; background:#196c2e;"></span>
+          <span style="width:11px; height:11px; border-radius:2px; background:#2ea043;"></span>
+          <span style="width:11px; height:11px; border-radius:2px; background:var(--cj-accent);"></span>
+          <span>more</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 · LEDGER / stats -->
+    <section class="cj-section" data-screen-label="Ledger" style="position:relative; min-height:110vh; display:flex; flex-direction:column; justify-content:center; padding:0 8vw; pointer-events:none;">
+      <div data-reveal style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--cj-accent); margin-bottom:34px;">// THE_LEDGER</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:30px 50px; max-width:1000px;">
+        <div data-reveal>
+          <div class="cj-counter" data-count="55" data-suffix="+" style="font-size:clamp(48px,6vw,86px); font-weight:600; letter-spacing:-.03em; line-height:1; color:var(--cj-accent);">0</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-top:10px;">pull requests merged</div>
+        </div>
+        <div data-reveal>
+          <div class="cj-counter" data-count="50" data-suffix="" style="font-size:clamp(48px,6vw,86px); font-weight:600; letter-spacing:-.03em; line-height:1; color:var(--cj-text);">0</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-top:10px;">repositories</div>
+        </div>
+        <div data-reveal>
+          <div class="cj-counter" data-count="2" data-suffix="" style="font-size:clamp(48px,6vw,86px); font-weight:600; letter-spacing:-.03em; line-height:1; color:var(--cj-text);">0</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-top:10px;">open-source orgs</div>
+        </div>
+        <div data-reveal>
+          <div class="cj-counter" data-count="8" data-suffix="+" style="font-size:clamp(48px,6vw,86px); font-weight:600; letter-spacing:-.03em; line-height:1; color:var(--cj-text);">0</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-dim); margin-top:10px;">languages shipped</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 · CONTACT / open a PR -->
+    <section class="cj-section" data-screen-label="Contact" style="position:relative; min-height:110vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 6vw; pointer-events:none;">
+      <div data-reveal style="width:100%; max-width:560px; pointer-events:auto;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.18em; color:var(--cj-accent); margin-bottom:20px; text-align:center;">// HEAD</div>
+        <h2 style="margin:0 0 26px; font-weight:600; font-size:clamp(30px,4.4vw,52px); line-height:1.04; letter-spacing:-.03em; text-align:center;">Open a pull request.</h2>
+        <div style="border:1px solid var(--cj-slate); border-radius:12px; overflow:hidden; background:rgba(13,17,23,.72); backdrop-filter:blur(8px);">
+          <div style="display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:1px solid var(--cj-slate); font-family:'JetBrains Mono',monospace; font-size:12px;">
+            <span style="display:inline-flex; align-items:center; gap:6px; color:var(--cj-accent);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--cj-accent); box-shadow:0 0 8px var(--cj-accent);"></span>Open
+            </span>
+            <span style="color:var(--cj-dim);">parthdagia05 / <span style="color:var(--cj-text);">lets-build-something</span></span>
+          </div>
+          <div style="padding:20px 18px;">
+            <div style="font-size:18px; font-weight:500; color:var(--cj-text); margin-bottom:6px;">feat: a conversation with Parth</div>
+            <p style="margin:0 0 20px; font-size:14px; line-height:1.6; color:#9aa6b2;">Always open to meeting like-minded builders — protocols, open source, or the next thing in crypto. Branch off and say hi.</p>
+            <div style="display:flex; flex-wrap:wrap; gap:10px;">
+              <a href="mailto:work.parthdagia@gmail.com" style="flex:1; min-width:150px; text-align:center; text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:#04130a; background:var(--cj-accent); padding:12px 16px; border-radius:7px; box-shadow:0 0 20px rgba(57,211,83,.35);">Create pull request</a>
+              <a href="https://github.com/parthdagia05" target="_blank" rel="noopener" style="text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:12px 16px; border-radius:7px;">GitHub</a>
+              <a href="https://x.com/parthdagia" target="_blank" rel="noopener" style="text-decoration:none; font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--cj-text); border:1px solid var(--cj-slate); padding:12px 16px; border-radius:7px;">Twitter</a>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center; margin-top:30px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#4d5560;">— end of history · HEAD detached at <span style="color:var(--cj-accent);">parth/main</span> —</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#39D353&quot;,&quot;options&quot;:[&quot;#39D353&quot;,&quot;#F0883E&quot;,&quot;#58A6FF&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;,&quot;label&quot;:&quot;Trunk accent&quot;},&quot;bloom&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.72,&quot;min&quot;:0,&quot;max&quot;:2,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Theme&quot;,&quot;label&quot;:&quot;Bloom strength&quot;},&quot;particles&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Theme&quot;,&quot;label&quot;:&quot;Background particles&quot;}}">
+class Component extends DCLogic {
+  /* =========================================================================
+     COMMIT JOURNEY — scroll-driven 3D git-history portfolio
+     -------------------------------------------------------------------------
+     EDIT CONTENT HERE → the PORTFOLIO config below drives the 3D node layout.
+     The matching 2D text lives in the template (editable inline). Camera-path
+     + scroll-sync logic is in initScene() / startRenderLoop() and is the part
+     most likely to be tweaked — it is commented in detail.
+     ========================================================================= */
+
+  componentDidMount() {
+    this.disposed = false;
+    this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.mobile = window.innerWidth < 768;
+
+    // apply accent tweak to the 2D UI (CSS var) + remember for the 3D scene
+    this.accent = this.props.accent || '#39D353';
+    this.bloomStrength = (this.props.bloom != null ? this.props.bloom : 0.72);
+    this.showParticles = (this.props.particles != null ? this.props.particles : true);
+    document.documentElement.style.setProperty('--cj-accent', this.accent);
+
+    // wait for the UMD libs (gsap/ScrollTrigger/Lenis) to finish loading, then boot
+    this.waitForLibs().then(() => this.boot()).catch(e => console.warn('[CommitJourney] boot failed', e));
+  }
+
+  componentDidUpdate(prev) {
+    // live tweak updates (accent / bloom / particles)
+    if (this.props.accent && this.props.accent !== this.accent) {
+      this.accent = this.props.accent;
+      document.documentElement.style.setProperty('--cj-accent', this.accent);
+      if (this.THREE && this._accentMats) {
+        const c = new this.THREE.Color(this.accent);
+        this._accentMats.forEach(m => { m.color && m.color.set(c); m.emissive && m.emissive.set(c); });
+      }
+    }
+    if (this.props.bloom != null && this.props.bloom !== this.bloomStrength) {
+      this.bloomStrength = this.props.bloom;
+      if (this.bloomPass) this.bloomPass.strength = this.bloomStrength;
+    }
+    if (this.props.particles != null && this.props.particles !== this.showParticles) {
+      this.showParticles = this.props.particles;
+      if (this.particles) this.particles.visible = this.showParticles;
+    }
+  }
+
+  componentWillUnmount() {
+    this.disposed = true;
+    try { if (this.renderer) { this.renderer.setAnimationLoop(null); this.renderer.dispose(); } } catch (e) {}
+    try { if (this.lenis) this.lenis.destroy(); } catch (e) {}
+    try { if (window.ScrollTrigger) window.ScrollTrigger.getAll().forEach(t => t.kill()); } catch (e) {}
+    window.removeEventListener('resize', this._onResize);
+    window.removeEventListener('pointermove', this._onPointer);
+  }
+
+  waitForLibs() {
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now();
+      const tick = () => {
+        if (this.disposed) return;
+        if (window.gsap && window.ScrollTrigger && window.Lenis) return resolve();
+        if (Date.now() - t0 > 12000) return reject(new Error('libs timeout'));
+        setTimeout(tick, 60);
+      };
+      tick();
+    });
+  }
+
+  /* ---- the editable portfolio config (drives 3D node placement) ---------- */
+  get PORTFOLIO() {
+    return {
+      // t = camera-path progress [0..1] where each project's MERGE NODE sits.
+      // Values are tuned to line up with the project slabs in the template
+      // (projects section starts ~25% down the page; 4 slabs of 100vh each).
+      projects: [
+        { name: 'block-based-program-builder', lang: '#e3b341', side: -1, t: 0.253 },
+        { name: 'clearpath-rag',               lang: '#e3b341', side:  1, t: 0.368 },
+        { name: 'Music Blocks',                lang: '#f1e05a', side: -1, t: 0.483 },
+        { name: 'OSeMOSYS',                    lang: '#3572A5', side:  1, t: 0.598 }
+      ],
+      skylineT: 0.74,   // where the contribution skyline city sits along the path
+      headT: 0.985      // final HEAD node (contact)
+    };
+  }
+
+  async boot() {
+    const THREE = await import('three');
+    const { EffectComposer } = await import('three/addons/postprocessing/EffectComposer.js');
+    const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
+    const { UnrealBloomPass } = await import('three/addons/postprocessing/UnrealBloomPass.js');
+    const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
+    if (this.disposed) return;
+    this.THREE = THREE;
+    this.initScene(THREE, EffectComposer, RenderPass, UnrealBloomPass, OutputPass);
+    this.initScroll();
+    this.startRenderLoop();
+  }
+
+  /* ======================================================================
+     SCENE
+     ====================================================================== */
+  initScene(THREE, EffectComposer, RenderPass, UnrealBloomPass, OutputPass) {
+    const stage = document.getElementById('cj-stage');
+    const w = window.innerWidth, h = window.innerHeight;
+    const accent = new THREE.Color(this.accent);
+    const cyan = new THREE.Color('#58A6FF');
+    this._accentMats = [];
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x07070a, 0.012);
+    this.scene = scene;
+
+    const camera = new THREE.PerspectiveCamera(52, w / h, 0.1, 200);
+    camera.position.set(3, 5, 9);
+    this.camera = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: !this.mobile, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.mobile ? 1.5 : 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.86;
+    stage.appendChild(renderer.domElement);
+    this.renderer = renderer;
+
+    // lights — dark scene, one key light; emissive materials carry the glow
+    scene.add(new THREE.AmbientLight(0x223044, 0.6));
+    const key = new THREE.DirectionalLight(0xbcd2ff, 0.8);
+    key.position.set(4, 8, 6);
+    scene.add(key);
+
+    /* ---- THE TRUNK: a CatmullRom curve the camera flies along ---------- */
+    // Control points descend in -y and into -z with a gentle x zigzag so the
+    // history reads as a living spine plunging into deep space.
+    const trunkPts = [
+      new THREE.Vector3(0.0, 7.0, 6.0),
+      new THREE.Vector3(0.7, 3.5, 1.0),
+      new THREE.Vector3(-0.6, 0.0, -5.0),
+      new THREE.Vector3(0.9, -3.5, -11.0),
+      new THREE.Vector3(-0.8, -7.0, -17.5),
+      new THREE.Vector3(0.5, -10.5, -24.0),
+      new THREE.Vector3(0.0, -14.0, -31.0)
+    ];
+    const curve = new THREE.CatmullRomCurve3(trunkPts, false, 'catmullrom', 0.5);
+    this.curve = curve;
+
+    // glowing trunk tube
+    const trunkGeo = new THREE.TubeGeometry(curve, 240, 0.045, 8, false);
+    const trunkMat = new THREE.MeshBasicMaterial({ color: accent.clone().multiplyScalar(0.9), transparent: true, opacity: 0.55 });
+    scene.add(new THREE.Mesh(trunkGeo, trunkMat));
+    this._accentMats.push(trunkMat);
+
+    /* ---- COMMIT NODES along the trunk (InstancedMesh — one draw call) --- */
+    const N = this.mobile ? 90 : 200;
+    const nodeGeo = new THREE.IcosahedronGeometry(0.085, 0);
+    const nodeMat = new THREE.MeshStandardMaterial({ color: 0x0d1117, emissive: accent, emissiveIntensity: 1.2, roughness: 0.4, metalness: 0.1 });
+    this._accentMats.push(nodeMat);
+    const inst = new THREE.InstancedMesh(nodeGeo, nodeMat, N);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < N; i++) {
+      const t = i / (N - 1);
+      const p = curve.getPointAt(t);
+      // small lateral jitter so nodes feel hand-placed, not on a perfect line
+      p.x += Math.sin(i * 1.7) * 0.06;
+      p.y += Math.cos(i * 2.3) * 0.05;
+      const sc = 0.7 + (i % 5 === 0 ? 0.7 : 0);
+      s.set(sc, sc, sc);
+      m4.compose(p, q, s);
+      inst.setMatrixAt(i, m4);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+    scene.add(inst);
+
+    /* ---- MAJOR NODES + BRANCHES ---------------------------------------
+       Endpoints (init / HEAD) are stable so we place them now. The PROJECT
+       merge nodes are placed later (placeProjects) once we can measure where
+       each project panel actually centers in the scroll — see initScroll. */
+    this.majorNodes = [];
+    this._accentCol = accent;
+    this._cyanCol = cyan;
+    this._projGeo = new THREE.IcosahedronGeometry(0.24, 1);
+    this.makeMajor(0.012, 0, 'git init · ~/parth', true);
+    this.makeMajor(this.PORTFOLIO.headT, 0, 'HEAD · parth/main', true);
+
+    /* ---- CONTRIBUTION SKYLINE (extruded 52×7-ish grid, instanced) ------ */
+    this.buildSkyline(THREE, accent);
+
+    /* ---- PARTICLE FIELD (deep background depth) ------------------------ */
+    const pCount = this.mobile ? 350 : 1100;
+    const pGeo = new THREE.BufferGeometry();
+    const pos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 40;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 44 - 4;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 50 - 12;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pMat = new THREE.PointsMaterial({ color: 0x6f7d8c, size: 0.04, transparent: true, opacity: 0.5, depthWrite: false });
+    this.particles = new THREE.Points(pGeo, pMat);
+    this.particles.visible = this.showParticles;
+    scene.add(this.particles);
+
+    /* ---- POST: bloom (CSS handles grain + vignette) -------------------- */
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), this.bloomStrength, 0.55, 0.2);
+    bloom.threshold = 0.2;
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+    this.bloomPass = bloom;
+
+    // reusable vectors for the render loop (NO per-frame allocation)
+    this._pos = new THREE.Vector3();
+    this._look = new THREE.Vector3();
+    this._tan = new THREE.Vector3();
+    this._side = new THREE.Vector3();
+    this._worldUp = new THREE.Vector3(0, 1, 0);
+    this._camTarget = new THREE.Vector3();
+    this._proj = new THREE.Vector3();
+    this._ray = new THREE.Raycaster();
+    this._ndc = new THREE.Vector2(2, 2); // offscreen until pointer moves
+    this.camT = 0;
+    this.targetT = 0;
+    this.parallax = { x: 0, y: 0, tx: 0, ty: 0 };
+
+    // events
+    this._onResize = () => this.onResize();
+    this._onPointer = (e) => this.onPointer(e);
+    window.addEventListener('resize', this._onResize);
+    if (!this.mobile && !this.reduced) window.addEventListener('pointermove', this._onPointer);
+
+    this.tooltip = document.getElementById('cj-tooltip');
+    this.hovered = null;
+  }
+
+  buildSkyline(THREE, accent) {
+    const COLS = this.mobile ? 22 : 30, ROWS = 7;
+    const total = COLS * ROWS;
+    const group = new THREE.Group();
+    const ramp = [new THREE.Color('#0e2a16'), new THREE.Color('#196c2e'), new THREE.Color('#2ea043'), accent.clone()];
+    const geo = new THREE.BoxGeometry(0.16, 1, 0.16);
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0.1, emissiveIntensity: 0.9, vertexColors: false });
+    // we need per-instance color + emissive → use instanceColor and an emissive trick:
+    const skyMat = new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.05 });
+    const inst = new THREE.InstancedMesh(geo, skyMat, total);
+    inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
+    const gap = 0.22;
+    this.skylineData = [];
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        const i = c * ROWS + r;
+        // deterministic pseudo-activity 0..4
+        const n = (Math.sin(c * 1.3 + r * 2.1) * 0.5 + 0.5) * (Math.sin(c * 0.4) * 0.5 + 0.5);
+        const level = Math.min(4, Math.floor(n * 5));
+        const height = 0.12 + level * 0.55 + (level > 0 ? Math.random() * 0.2 : 0);
+        p.set((c - COLS / 2) * gap, height / 2, (r - ROWS / 2) * gap);
+        sc.set(1, height, 1);
+        m4.compose(p, q, sc);
+        inst.setMatrixAt(i, m4);
+        col.copy(ramp[Math.max(0, level - 1)] || ramp[0]);
+        if (level === 0) col.setRGB(0.05, 0.09, 0.06);
+        inst.setColorAt(i, col);
+        this.skylineData.push({ col: c, row: r, level, height });
+      }
+    }
+    inst.instanceColor.needsUpdate = true;
+    inst.instanceMatrix.needsUpdate = true;
+    // emissive driven uniformly; bloom lifts the bright greens
+    skyMat.emissive = new THREE.Color(0x1a7d33);
+    skyMat.emissiveIntensity = 0.45;
+    group.add(inst);
+
+    group.rotation.x = -0.18;
+    this.skyline = group;
+    this.skylineInst = inst;
+    this.scene.add(group);
+    this.positionSkyline(this.PORTFOLIO.skylineT); // default; re-aligned in initScroll
+  }
+
+  // Place the contribution city in the CAMERA's view space at scroll-progress
+  // tSky: in front of the camera, pushed to screen-right and slightly down so
+  // it sweeps into the empty area beside the left-aligned skyline copy. We
+  // reconstruct the same camera basis the render loop uses at this t.
+  positionSkyline(tSky) {
+    const THREE = this.THREE, up = new THREE.Vector3(0, 1, 0);
+    const P = this.curve.getPointAt(tSky);
+    const tan = this.curve.getTangentAt(tSky).normalize();
+    const side = up.clone().cross(tan).normalize();
+    const camPos = P.clone().addScaledVector(side, 1.05).addScaledVector(up, 0.55).addScaledVector(tan, -0.7);
+    const lookAt = this.curve.getPointAt(Math.min(1, tSky + 0.06));
+    const fwd = lookAt.clone().sub(camPos).normalize();
+    const camRight = fwd.clone().cross(up).normalize();
+    const camUp = camRight.clone().cross(fwd).normalize();
+    this.skyline.position.copy(camPos).addScaledVector(fwd, 7.2).addScaledVector(camRight, 3.0).addScaledVector(camUp, -1.0);
+    this.skyline.scale.setScalar(1.5);
+  }
+
+  // a glowing branch that splits off the trunk near t, bows to `side`, merges back
+  addBranch(t, side) {
+    const THREE = this.THREE, scene = this.scene, curve = this.curve;
+    const a = curve.getPointAt(Math.max(0, t - 0.05));
+    const b = curve.getPointAt(Math.min(1, t + 0.05));
+    const c1 = a.clone().add(new THREE.Vector3(side * 2.4, 0.7, side * 0.4));
+    const c2 = b.clone().add(new THREE.Vector3(side * 2.4, -0.7, side * 0.4));
+    const bez = new THREE.CubicBezierCurve3(a, c1, c2, b);
+    const bgeo = new THREE.TubeGeometry(bez, 44, 0.02, 6, false);
+    const bmat = new THREE.MeshBasicMaterial({ color: this._cyanCol.clone().multiplyScalar(0.5), transparent: true, opacity: 0.4 });
+    scene.add(new THREE.Mesh(bgeo, bmat));
+    const beadMat = new THREE.MeshStandardMaterial({ color: 0x0d1117, emissive: this._cyanCol, emissiveIntensity: 1.1, roughness: 0.5 });
+    [0.32, 0.68].forEach(u => { const bead = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 0), beadMat); bead.position.copy(bez.getPointAt(u)); scene.add(bead); });
+    return { bmat };
+  }
+
+  // a larger, pulsing commit node (project / endpoint) with a halo ring
+  makeMajor(t, side, label, isAccent) {
+    const THREE = this.THREE, scene = this.scene;
+    const branch = (side !== 0) ? this.addBranch(t, side) : null;
+    const col = isAccent ? this._accentCol : this._cyanCol;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0d1117, emissive: col, emissiveIntensity: 1.35, roughness: 0.3, metalness: 0.2 });
+    if (isAccent) this._accentMats.push(mat);
+    const mesh = new THREE.Mesh(this._projGeo, mat);
+    mesh.position.copy(this.curve.getPointAt(t));
+    mesh.userData = { label, branch, mat };
+    scene.add(mesh);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.38, 32), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.25, side: THREE.DoubleSide }));
+    ring.position.copy(mesh.position);
+    mesh.userData.ring = ring;
+    scene.add(ring);
+    this.majorNodes.push(mesh);
+    return mesh;
+  }
+
+  // create the project merge nodes at measured scroll positions
+  placeProjects(tArr) {
+    const projs = this.PORTFOLIO.projects;
+    tArr.forEach((t, i) => { if (projs[i]) this.makeMajor(t, projs[i].side, projs[i].name, true); });
+  }
+
+  /* ======================================================================
+     SCROLL SYNC  (the spine of the whole experience)
+     ----------------------------------------------------------------------
+     One master ScrollTrigger maps total page scroll → targetT [0..1].
+     Lenis provides inertial smoothing and is driven by GSAP's ticker so the
+     two never fight. The camera eases toward targetT in the render loop, a
+     touch slower than the DOM reveals, so motion feels weighty.
+     ====================================================================== */
+  initScroll() {
+    const gsap = window.gsap, ScrollTrigger = window.ScrollTrigger, Lenis = window.Lenis;
+    gsap.registerPlugin(ScrollTrigger);
+
+    // --- self-aligning layout: measure where each project panel centers in
+    // the scroll and drop a merge node there, so the camera arrives at the
+    // node exactly as the panel slides in. Done before any reduced-motion
+    // branch so the graph is complete in every mode.
+    const scrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const vh = window.innerHeight;
+    const tArr = [];
+    document.querySelectorAll('.cj-project').forEach(a => {
+      const top = a.getBoundingClientRect().top + window.scrollY;
+      tArr.push(Math.max(0.04, Math.min(0.95, (top + a.offsetHeight / 2 - vh / 2) / scrollable)));
+    });
+    this.placeProjects(tArr);
+    const skySec = document.querySelector('[data-screen-label="Skyline"]');
+    if (skySec) {
+      const top = skySec.getBoundingClientRect().top + window.scrollY;
+      this.positionSkyline(Math.max(0, Math.min(1, (top + skySec.offsetHeight / 2 - vh / 2) / scrollable)));
+    }
+
+    if (this.reduced) {
+      // prefers-reduced-motion: no fly-through, no smooth scroll, no parallax.
+      this.camT = this.targetT = 0.22;             // a calm static framing
+      document.querySelectorAll('[data-reveal]').forEach(el => { el.style.opacity = 1; el.style.transform = 'none'; });
+      this.runCountersOnView(true);
+      return;
+    }
+
+    // Lenis smooth scroll, synced to GSAP ticker (per spec)
+    const lenis = new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 1.0 });
+    lenis.on('scroll', ScrollTrigger.update);
+    gsap.ticker.add((time) => { lenis.raf(time * 1000); });
+    gsap.ticker.lagSmoothing(0);
+    this.lenis = lenis;
+
+    // master camera timeline: scrub page scroll → targetT
+    const prog = document.getElementById('cj-progress');
+    ScrollTrigger.create({
+      trigger: '#cj-root', start: 'top top', end: 'bottom bottom', scrub: true,
+      onUpdate: (self) => {
+        this.targetT = self.progress;
+        if (prog) prog.style.width = (self.progress * 100).toFixed(2) + '%';
+      }
+    });
+
+    // 2D overlay reveals (eased, tied to the same scroll).
+    // We use onEnter callbacks instead of a scrubbed tween, and reveal any
+    // element already on-screen at load (ScrollTrigger treats those as "past"
+    // and would otherwise never fire their enter callback).
+    const reveal = (el) => gsap.to(el, { opacity: 1, y: 0, duration: 1, ease: 'power2.out', overwrite: 'auto' });
+    gsap.utils.toArray('[data-reveal]').forEach(el => {
+      gsap.set(el, { opacity: 0, y: 34 });
+      ScrollTrigger.create({
+        trigger: el, start: 'top 85%',
+        onEnter: () => reveal(el),
+        onEnterBack: () => reveal(el),
+        onLeaveBack: () => gsap.to(el, { opacity: 0, y: 34, duration: 0.4, overwrite: 'auto' })
+      });
+    });
+    // reveal whatever is already in the first viewport
+    requestAnimationFrame(() => {
+      document.querySelectorAll('[data-reveal]').forEach(el => {
+        if (el.getBoundingClientRect().top < window.innerHeight * 0.92) reveal(el);
+      });
+    });
+
+    this.runCountersOnView(false);
+  }
+
+  runCountersOnView(immediate) {
+    const els = Array.from(document.querySelectorAll('.cj-counter'));
+    const animate = (el) => {
+      const target = parseInt(el.getAttribute('data-count'), 10) || 0;
+      const suffix = el.getAttribute('data-suffix') || '';
+      const obj = { v: 0 };
+      window.gsap.to(obj, { v: target, duration: 1.8, ease: 'power2.out', onUpdate: () => { el.textContent = Math.round(obj.v) + suffix; } });
+    };
+    if (immediate) { els.forEach(animate); return; }
+    els.forEach(el => {
+      window.ScrollTrigger.create({ trigger: el, start: 'top 85%', once: true, onEnter: () => animate(el) });
+    });
+  }
+
+  /* ======================================================================
+     RENDER LOOP
+     ====================================================================== */
+  startRenderLoop() {
+    const THREE = this.THREE;
+    let last = performance.now();
+    this.renderer.setAnimationLoop(() => {
+      if (this.disposed) return;
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const time = now * 0.001;
+
+      // --- camera eases toward targetT (slower than content = weighty) ----
+      this.camT += (this.targetT - this.camT) * (this.reduced ? 1 : 0.055);
+      const t = Math.max(0, Math.min(1, this.camT));
+
+      // Build a frame that travels WITH the curve so the trunk stays framed
+      // the whole way down: P = point, T = tangent, side = worldUp × T.
+      this.curve.getPointAt(t, this._pos);
+      this.curve.getTangentAt(t, this._tan);
+      this._side.crossVectors(this._worldUp, this._tan).normalize();
+      this.curve.getPointAt(Math.min(1, t + 0.06), this._look);
+
+      // cursor parallax (eased) — scroll always owns primary motion
+      this.parallax.x += (this.parallax.tx - this.parallax.x) * 0.05;
+      this.parallax.y += (this.parallax.ty - this.parallax.y) * 0.05;
+
+      // 3/4 traveling view: offset to the side, lifted, and slightly behind so
+      // the current commit + the ones ahead are always in frame.
+      this._camTarget.copy(this._pos)
+        .addScaledVector(this._side, 1.05 + this.parallax.x * 0.7)
+        .addScaledVector(this._worldUp, 0.55 + this.parallax.y * 0.5)
+        .addScaledVector(this._tan, -0.7);
+      this.camera.position.lerp(this._camTarget, this.reduced ? 1 : 0.10);
+      this.camera.lookAt(this._look);
+
+      // major nodes: soft pulse + hover scale
+      for (const node of this.majorNodes) {
+        const pulse = 1 + Math.sin(time * 1.6 + node.position.x) * 0.07;
+        const target = (this.hovered === node ? 1.55 : 1) * pulse;
+        const cur = node.scale.x + (target - node.scale.x) * 0.15;
+        node.scale.setScalar(cur);
+        if (node.userData.ring) { node.userData.ring.lookAt(this.camera.position); node.userData.ring.scale.setScalar(cur); }
+        node.userData.mat.emissiveIntensity = (this.hovered === node ? 2.4 : 1.35);
+        if (node.userData.branch) node.userData.branch.bmat.opacity = (this.hovered === node ? 0.95 : 0.4);
+      }
+
+      // particle drift
+      if (this.particles && this.particles.visible) {
+        this.particles.rotation.y += dt * 0.012;
+        this.particles.position.y = Math.sin(time * 0.2) * 0.3;
+      }
+
+      // skyline slow rotation
+      if (this.skyline) this.skyline.rotation.y += dt * 0.18;
+
+      // hover raycast (few objects → cheap)
+      if (!this.reduced && !this.mobile) this.updateHover();
+
+      this.composer.render();
+    });
+  }
+
+  updateHover() {
+    if (this._ndc.x > 1.5) return; // pointer hasn't moved onto canvas
+    this._ray.setFromCamera(this._ndc, this.camera);
+    const hits = this._ray.intersectObjects(this.majorNodes, false);
+    const hit = hits.length ? hits[0].object : null;
+    if (hit !== this.hovered) {
+      this.hovered = hit;
+      const tip = this.tooltip;
+      if (hit && tip) {
+        tip.style.opacity = '1';
+        tip.querySelector('[data-tip-title]').textContent = hit.userData.label;
+      } else if (tip) {
+        tip.style.opacity = '0';
+      }
+      document.body.style.cursor = hit ? 'pointer' : '';
+    }
+    // position tooltip at projected node coords
+    if (this.hovered && this.tooltip) {
+      this._proj.copy(this.hovered.position).project(this.camera);
+      const x = (this._proj.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-this._proj.y * 0.5 + 0.5) * window.innerHeight;
+      this.tooltip.style.transform = `translate(${x + 18}px, ${y - 14}px)`;
+    }
+  }
+
+  onPointer(e) {
+    this._ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
+    this._ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    this.parallax.tx = this._ndc.x;
+    this.parallax.ty = this._ndc.y;
+  }
+
+  onResize() {
+    if (!this.renderer) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    this.mobile = w < 768;
+    this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+    this.composer.setSize(w, h);
+  }
+
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
