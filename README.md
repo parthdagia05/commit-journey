@@ -57,6 +57,13 @@ every number comes from the GitHub API.
 - merged pull requests (REST search), grouped by repo and by owner. Repos owned
   by the profile itself are excluded from the "upstream" totals.
 
+The PR query is pinned to `is:public`, because a personal token also sees merged
+PRs in your own private repos while CI's `GITHUB_TOKEN` does not; without the
+pin, a local run and a CI run disagree and the committed file flip-flops. The
+contribution calendar total is the one figure that still moves with the token
+(the owner's own token counts private contributions), so CI is the source of
+truth for it.
+
 A daily workflow re-runs it and commits the file if it changed, so the page
 stays a plain static site with no token in the browser. To refresh by hand:
 

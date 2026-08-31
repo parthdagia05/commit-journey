@@ -6,6 +6,11 @@
  * counts come from the REST search API. Both need a token; in CI that is
  * GH_PAT if present, otherwise the workflow's GITHUB_TOKEN.
  *
+ * PR counts are pinned to is:public so every token agrees. The calendar total
+ * is the one number that still moves with the token: the profile owner's own
+ * token includes their private contributions, GITHUB_TOKEN does not. The
+ * difference is small and the committed file is whatever CI last wrote.
+ *
  *   GITHUB_TOKEN=$(gh auth token) node scripts/fetch-github-data.mjs
  */
 
@@ -73,7 +78,11 @@ async function mergedPRs() {
   let total = 0;
 
   for (let page = 1; page <= 10; page++) {
-    const q = encodeURIComponent(`is:pr author:${LOGIN} is:merged`);
+    // is:public keeps the result independent of whose token is running this.
+    // A personal token also sees merged PRs in the user's own private repos,
+    // so without it CI and a local run disagree, and the committed file
+    // flip-flops. Public-only is also the number a visitor can verify.
+    const q = encodeURIComponent(`is:pr author:${LOGIN} is:merged is:public`);
     const res = await fetch(
       `https://api.github.com/search/issues?q=${q}&per_page=100&page=${page}`,
       { headers: HEADERS }
