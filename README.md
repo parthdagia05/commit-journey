@@ -11,7 +11,7 @@ Built as a single self-contained page using **Three.js** (3D), **GSAP + ScrollTr
 
 ## Files
 
-- `Commit Journey.dc.html` — the entire experience (markup + 3D scene + scroll logic).
+- `index.html` — the entire experience (markup + 3D scene + scroll logic).
 - `support.js` — the small runtime the page depends on. **Must stay in the same folder.**
 
 ## Run it
@@ -26,27 +26,40 @@ ES-module imports over `file://`):
 
 ```bash
 python3 -m http.server 8000
-# then open http://localhost:8000/Commit%20Journey.dc.html
+# then open http://localhost:8000/
 ```
 
-## Push to your own GitHub repo
+## Content
 
-```bash
-# from inside this unzipped folder
-git init
-git add .
-git commit -m "Commit Journey — 3D portfolio"
-# create an EMPTY private repo on github.com first, then:
-git remote add origin https://github.com/parthdagia05/commit-journey.git
-git branch -M main
-git push -u origin main
-```
+The six merge points are, in scroll order:
 
-(Or use github.com → "Add file" → "Upload files" and drag both files in.)
+| # | Node | Stack |
+|---|------|-------|
+| 1 | Music Blocks 4 · Sugar Labs (GSoC 2026, maintainer) | TypeScript, React, SVG |
+| 2 | Kubescape (CNCF) | Go, Kubernetes, CEL |
+| 3 | WasmEdge (CNCF) | C++17, CMake, WebAssembly |
+| 4 | Hyperledger Besu | Java, JMH, Gradle |
+| 5 | exlang — JIT compiler for integer expressions | C++17, LLVM, ORC JIT |
+| 6 | schemago — PostgreSQL migration runner | Go, PostgreSQL, Docker |
 
 ## Editing content
 
-Project data (names, descriptions, stack chips, links, stats) lives in the markup
-of `Commit Journey.dc.html`. The 3D merge-node placement is auto-aligned to where
-each project panel sits in the scroll — no coordinate tweaking needed when you
-edit copy. The camera-path and scroll-sync logic is commented in the script.
+Project copy (names, descriptions, stack chips, links, stats) lives in the markup
+of `index.html`, in the `<!-- 03 · PROJECTS -->` section — one `<article class="cj-project">`
+per 100vh slab, alternating `justify-content` left/right.
+
+The 3D merge-node placement is **auto-aligned** to where each project panel sits in
+the scroll — no coordinate tweaking needed when you edit copy. If you add or remove a
+project, keep three things in sync:
+
+1. the number of `.cj-project` articles and their `top:Nvh` offsets,
+2. the section's `min-height` (100vh per project),
+3. the `PORTFOLIO.projects` array in the script — it supplies each node's hover
+   label and which side (`-1` / `+1`) its branch bows to.
+
+The camera-path and scroll-sync logic is commented in the script.
+
+## Logo
+
+The mark (a commit node on the trunk with a branch merging back in) is inline SVG —
+used both as the nav badge and, URL-encoded, as the `data:` favicon in `<head>`.
