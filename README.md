@@ -13,6 +13,9 @@ Built as a single self-contained page using **Three.js** (3D), **GSAP + ScrollTr
 
 - `index.html`: the entire experience (markup + 3D scene + scroll logic).
 - `support.js`: the small runtime the page depends on. **Must stay in the same folder.**
+- `data/github.json`: the real contribution calendar and merged-PR counts, regenerated daily by CI.
+- `scripts/fetch-github-data.mjs`: builds that file.
+- `.github/workflows/refresh-github-data.yml`: runs the script on a daily cron.
 
 ## Run it
 
@@ -41,6 +44,37 @@ The six merge points are, in scroll order:
 | 4 | Hyperledger Besu | Java, JMH, Gradle |
 | 5 | exlang, a JIT compiler for integer expressions | C++17, LLVM, ORC JIT |
 | 6 | schemago, a PostgreSQL migration runner | Go, PostgreSQL, Docker |
+
+## Live data
+
+The skyline and the counters are not decoration: every bar is a real day and
+every number comes from the GitHub API.
+
+`scripts/fetch-github-data.mjs` pulls two things and writes `data/github.json`:
+
+- the contribution calendar (GraphQL, stored as a start date plus a flat run of
+  daily counts, so 367 days cost one array instead of 367 date strings), and
+- merged pull requests (REST search), grouped by repo and by owner. Repos owned
+  by the profile itself are excluded from the "upstream" totals.
+
+A daily workflow re-runs it and commits the file if it changed, so the page
+stays a plain static site with no token in the browser. To refresh by hand:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) node scripts/fetch-github-data.mjs
+```
+
+The workflow prefers a `GH_PAT` secret and falls back to the built-in
+`GITHUB_TOKEN`. Add a `GH_PAT` (classic, `read:user`) only if the run reports
+that it could not read the contribution calendar; the PR search works with
+either.
+
+In the markup, `data-gh="prs.merged"` is a dot path into that JSON. On a
+`.cj-counter` the value becomes the count-up target; anywhere else it is
+written straight in, with an optional `data-gh-suffix`. If the fetch fails,
+including over `file://`, every bound element keeps the literal value in the
+HTML and the skyline falls back to its synthetic pattern, so the page never
+renders empty.
 
 ## Editing content
 
