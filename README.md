@@ -32,6 +32,36 @@ python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
+## Detached HEAD (undocumented on the page)
+
+The closing line of the page has always read `end of history · HEAD detached at
+parth/main`. It is now true if you click it. The camera comes off the scroll
+rail, the 2D page fades out, and you are left orbiting the whole commit graph
+you just travelled down. Drag to orbit, scroll to zoom, <kbd>esc</kbd> to
+reattach.
+
+It stays useful rather than ornamental: the merge nodes are still live out
+there, so clicking one reattaches HEAD and drops you on that project. The
+console can reach it too, with `git checkout --detach`, which is deliberately
+absent from `help` and from tab completion. `git status` owns up to the state
+the way real git does.
+
+Notes for later:
+
+- The trigger is only styled on hover, so it reads as body copy until a curious
+  visitor puts a cursor on it. That is the whole point; resist labelling it.
+- The travelling fog (`FogExp2`, density 0.012) would swallow a graph 40 units
+  deep when viewed from outside, so detaching eases it down to 0.0034 and
+  restores it on reattach.
+- Lenis is stopped while detached, so anything that scrolls has to reattach
+  first. `git checkout <ref>` from out there calls `attachHead(target)` rather
+  than `jumpTo`, because a stopped Lenis swallows `scrollTo` silently.
+- Node clicks resolve through `resolveRef` by label, and the 3D labels carry a
+  qualifier the headings do not (`exlang · LLVM ORC JIT` against an `<h3>` of
+  `exlang`), so `resolveRef` also retries on the first `·` segment.
+- It needs the scene, so it is the one feature that does nothing if WebGL or
+  the CDN is unavailable. The trigger no-ops and the console command says so.
+
 ## The commit rail
 
 A minimap of the graph pinned to the right edge. Each dot sits at the scroll

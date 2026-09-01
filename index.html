@@ -76,6 +76,20 @@
   .cj-rail-node:focus{ outline:none; }
   .cj-rail-node:focus-visible .cj-rail-dot{ background:var(--cj-cyan); box-shadow:0 0 0 2px rgba(88,166,255,.4); }
   @media (max-width:860px){ #cj-rail{ display:none; } }
+  /* ---- detached HEAD (hidden: the end-of-history line is the trigger) --- */
+  [data-cj-detach]{ pointer-events:auto; cursor:pointer; border-bottom:1px dotted transparent; transition:color .25s ease, border-color .25s ease, text-shadow .25s ease; }
+  [data-cj-detach]:hover, [data-cj-detach]:focus-visible{ color:var(--cj-text); border-bottom-color:#30363d; text-shadow:0 0 14px rgba(57,211,83,.4); outline:none; }
+  #cj-root, #cj-rail, #cj-progress-wrap{ transition:opacity .7s ease; }
+  body.cj-detached #cj-root, body.cj-detached #cj-rail, body.cj-detached #cj-progress-wrap{ opacity:0; pointer-events:none; }
+  body.cj-detached #cj-vignette{ opacity:.45; transition:opacity .7s ease; }
+  #cj-detach-hud{ position:fixed; top:78px; left:50%; transform:translate(-50%,-8px); z-index:56; opacity:0; pointer-events:none; transition:opacity .45s ease .25s, transform .45s ease .25s; font-family:'JetBrains Mono',monospace; }
+  body.cj-detached #cj-detach-hud{ opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+  .cj-hud-card{ background:rgba(13,17,23,.9); border:1px solid #1b2029; border-radius:9px; padding:10px 16px; text-align:center; box-shadow:0 14px 44px rgba(0,0,0,.5); backdrop-filter:blur(8px); }
+  .cj-hud-title{ font-size:11.5px; letter-spacing:.06em; color:var(--cj-text); }
+  .cj-hud-keys{ margin-top:5px; font-size:10.5px; letter-spacing:.05em; color:var(--cj-dim); }
+  .cj-hud-keys button{ font:inherit; color:var(--cj-accent); background:none; border:0; padding:0; cursor:pointer; border-bottom:1px dotted rgba(57,211,83,.45); }
+  .cj-hud-keys button:hover{ color:var(--cj-text); }
+  @media (prefers-reduced-motion: reduce){ #cj-root, #cj-rail, #cj-detach-hud, [data-cj-detach]{ transition:none; } }
   @media (prefers-reduced-motion: reduce){ .cj-rail-dot, .cj-rail-label{ transition:none; } }
 </style>
 </helmet>
@@ -92,7 +106,7 @@
   <div id="cj-flash" style="position:fixed; inset:0; z-index:42; pointer-events:none; opacity:0; background:radial-gradient(circle at 50% 55%, rgba(57,211,83,.5), rgba(57,211,83,0) 62%);"></div>
 
   <!-- top scroll progress -->
-  <div style="position:fixed; top:0; left:0; right:0; height:2px; z-index:55; background:rgba(255,255,255,.04);">
+  <div id="cj-progress-wrap" style="position:fixed; top:0; left:0; right:0; height:2px; z-index:55; background:rgba(255,255,255,.04);">
     <div id="cj-progress" style="height:100%; width:0%; background:linear-gradient(90deg,var(--cj-cyan),var(--cj-accent)); box-shadow:0 0 12px var(--cj-accent);"></div>
   </div>
 
@@ -116,6 +130,14 @@
   <!-- 3D node hover tooltip -->
   <div id="cj-tooltip" style="position:fixed; top:0; left:0; z-index:60; pointer-events:none; opacity:0; transition:opacity .18s ease; will-change:transform; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-text); background:rgba(13,17,23,.92); border:1px solid var(--cj-slate); border-radius:7px; padding:8px 12px; box-shadow:0 8px 30px rgba(0,0,0,.5); backdrop-filter:blur(6px); white-space:nowrap;">
     <span style="color:var(--cj-accent); margin-right:6px;">●</span><span data-tip-title>node</span>
+  </div>
+
+  <!-- detached-HEAD heads-up display (shown only in that mode) -->
+  <div id="cj-detach-hud" role="status">
+    <div class="cj-hud-card">
+      <div class="cj-hud-title"><span style="color:#F0883E;">●</span> HEAD detached at <span style="color:var(--cj-accent);">parth/main</span></div>
+      <div class="cj-hud-keys">drag to orbit · scroll to zoom · click a node to visit it · <button type="button" data-cj-reattach>esc to reattach</button></div>
+    </div>
   </div>
 
   <!-- ===== COMMIT RAIL (right-edge minimap; nodes injected by initRail) ===== -->
@@ -361,7 +383,7 @@
             </div>
           </div>
         </div>
-        <div style="text-align:center; margin-top:30px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#4d5560;">· end of history · HEAD detached at <span style="color:var(--cj-accent);">parth/main</span> ·</div>
+        <div style="text-align:center; margin-top:30px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#4d5560;">· end of history · <span data-cj-detach role="button" tabindex="0" aria-label="Detach HEAD and orbit the commit graph">HEAD detached at <span style="color:var(--cj-accent);">parth/main</span></span> ·</div>
         <div style="text-align:center; margin-top:10px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#3d4450;">counts fetched from the GitHub API on <span data-gh="generated">2026-09-01</span></div>
       </div>
     </section>
@@ -396,6 +418,7 @@ class Component extends DCLogic {
     // still works if Three.js or the CDN never arrives.
     this.initConsole();
     this.initRail();
+    this.initDetach();
 
     // wait for the UMD libs (gsap/ScrollTrigger/Lenis) to finish loading, then boot
     this.waitForLibs().then(() => this.boot()).catch(e => console.warn('[CommitJourney] boot failed', e));
@@ -425,6 +448,7 @@ class Component extends DCLogic {
     this.disposed = true;
     try { if (this.renderer) { this.renderer.setAnimationLoop(null); this.renderer.dispose(); } } catch (e) {}
     try { if (this.lenis) this.lenis.destroy(); } catch (e) {}
+    try { this.unbindOrbit(); } catch (e) {}
     try { if (window.ScrollTrigger) window.ScrollTrigger.getAll().forEach(t => t.kill()); } catch (e) {}
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointermove', this._onPointer);
@@ -892,36 +916,41 @@ class Component extends DCLogic {
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       const time = now * 0.001;
 
-      // --- camera eases toward targetT (slower than content = weighty) ----
-      this.camT += (this.targetT - this.camT) * (this.reduced ? 1 : 0.055);
-      const t = Math.max(0, Math.min(1, this.camT));
+      // --- detached HEAD takes the camera off the scroll rail entirely ----
+      if (this.detached) {
+        this.updateDetached(dt);
+      } else {
+        // --- camera eases toward targetT (slower than content = weighty) ----
+        this.camT += (this.targetT - this.camT) * (this.reduced ? 1 : 0.055);
+        const t = Math.max(0, Math.min(1, this.camT));
 
-      // Build a frame that travels WITH the curve so the trunk stays framed
-      // the whole way down: P = point, T = tangent, side = worldUp × T.
-      this.curve.getPointAt(t, this._pos);
-      this.curve.getTangentAt(t, this._tan);
-      this._side.crossVectors(this._worldUp, this._tan).normalize();
-      this.curve.getPointAt(Math.min(1, t + 0.06), this._look);
+        // Build a frame that travels WITH the curve so the trunk stays framed
+        // the whole way down: P = point, T = tangent, side = worldUp × T.
+        this.curve.getPointAt(t, this._pos);
+        this.curve.getTangentAt(t, this._tan);
+        this._side.crossVectors(this._worldUp, this._tan).normalize();
+        this.curve.getPointAt(Math.min(1, t + 0.06), this._look);
 
-      // cursor parallax (eased); scroll always owns primary motion
-      this.parallax.x += (this.parallax.tx - this.parallax.x) * 0.05;
-      this.parallax.y += (this.parallax.ty - this.parallax.y) * 0.05;
+        // cursor parallax (eased); scroll always owns primary motion
+        this.parallax.x += (this.parallax.tx - this.parallax.x) * 0.05;
+        this.parallax.y += (this.parallax.ty - this.parallax.y) * 0.05;
 
-      // 3/4 traveling view: offset to the side, lifted, and slightly behind so
-      // the current commit + the ones ahead are always in frame.
-      this._camTarget.copy(this._pos)
-        .addScaledVector(this._side, 1.05 + this.parallax.x * 0.7)
-        .addScaledVector(this._worldUp, 0.55 + this.parallax.y * 0.5)
-        .addScaledVector(this._tan, -0.7);
-      // console flare shake: a decaying jitter on the camera target only, so
-      // nothing in the DOM has to move for it
-      if (this._shake > 0.001) {
-        this._camTarget.x += (Math.random() - 0.5) * this._shake;
-        this._camTarget.y += (Math.random() - 0.5) * this._shake;
-        this._shake *= 0.90;
+        // 3/4 traveling view: offset to the side, lifted, and slightly behind so
+        // the current commit + the ones ahead are always in frame.
+        this._camTarget.copy(this._pos)
+          .addScaledVector(this._side, 1.05 + this.parallax.x * 0.7)
+          .addScaledVector(this._worldUp, 0.55 + this.parallax.y * 0.5)
+          .addScaledVector(this._tan, -0.7);
+        // console flare shake: a decaying jitter on the camera target only, so
+        // nothing in the DOM has to move for it
+        if (this._shake > 0.001) {
+          this._camTarget.x += (Math.random() - 0.5) * this._shake;
+          this._camTarget.y += (Math.random() - 0.5) * this._shake;
+          this._shake *= 0.90;
+        }
+        this.camera.position.lerp(this._camTarget, this.reduced ? 1 : 0.10);
+        this.camera.lookAt(this._look);
       }
-      this.camera.position.lerp(this._camTarget, this.reduced ? 1 : 0.10);
-      this.camera.lookAt(this._look);
 
       // major nodes: soft pulse + hover scale
       for (const node of this.majorNodes) {
@@ -944,7 +973,7 @@ class Component extends DCLogic {
       if (this.skyline) this.skyline.rotation.y += dt * 0.18;
 
       // hover raycast (few objects → cheap)
-      if (!this.reduced && !this.mobile) this.updateHover();
+      if ((!this.reduced && !this.mobile) || this.detached) this.updateHover();
 
       this.composer.render();
     });
@@ -965,6 +994,8 @@ class Component extends DCLogic {
         tip.style.opacity = '0';
       }
       document.body.style.cursor = hit ? 'pointer' : '';
+      // the canvas carries its own grab cursor while detached, so it wins over body
+      if (this.detached && this.renderer) this.renderer.domElement.style.cursor = hit ? 'pointer' : 'grab';
     }
     // position tooltip at projected node coords
     if (this.hovered && this.tooltip) {
@@ -1021,8 +1052,13 @@ class Component extends DCLogic {
       const tag = (e.target && e.target.tagName || '').toLowerCase();
       const typing = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.toggleConsole(); return; }
-      if (e.key === 'Escape' && this._con.open) { e.preventDefault(); this.toggleConsole(false); return; }
+      if (e.key === 'Escape') {
+        if (this._con.open) { e.preventDefault(); this.toggleConsole(false); }
+        else if (this.detached) { e.preventDefault(); this.attachHead(); }
+        return;
+      }
       if (e.key === '/' && !typing && !this._con.open) { e.preventDefault(); this.toggleConsole(true); return; }
+      if (this.detached) return;   // j/k would scroll a page that is locked and invisible
       if ((e.key === 'j' || e.key === 'k') && !typing && !this._con.open && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault(); this.stepCommit(e.key === 'j' ? 1 : -1);
       }
@@ -1086,17 +1122,30 @@ class Component extends DCLogic {
   }
 
   resolveRef(ref) {
-    const q = String(ref || '').toLowerCase().replace(/^['"]|['"]$/g, '').trim();
-    if (!q) return null;
-    if (q === 'head' || q === 'main' || q === 'parth/main') return { kind: 'head', name: 'parth/main' };
+    const raw = String(ref || '').toLowerCase().replace(/^['"]|['"]$/g, '').trim();
+    if (!raw) return null;
+    if (raw === 'head' || raw === 'main' || raw === 'parth/main') return { kind: 'head', name: 'parth/main' };
     const t = this.consoleTargets();
-    if (/^\d+$/.test(q)) return t.find(x => x.kind === 'commit' && x.n === parseInt(q, 10)) || null;
+    if (/^\d+$/.test(raw)) return t.find(x => x.kind === 'commit' && x.n === parseInt(raw, 10)) || null;
+
+    // Try the whole string, then just its first segment. The 3D node labels
+    // carry a qualifier the markup headings do not ("exlang · LLVM ORC JIT"
+    // against an <h3> of "exlang"), and clicking a node resolves by label.
+    const tries = [raw];
+    const first = raw.split('·')[0].trim();
+    if (first && first !== raw) tries.push(first);
+
     const low = (s) => String(s || '').toLowerCase();
-    return t.find(x => low(x.hash) === q)
-        || t.find(x => low(x.branch) === q)
-        || t.find(x => low(x.name) === q)
-        || t.find(x => low(x.name).includes(q) || low(x.branch).includes(q) || low(x.hash).startsWith(q))
-        || null;
+    for (const q of tries) {
+      const hit = t.find(x => x.hash && low(x.hash) === q)
+               || t.find(x => x.branch && low(x.branch) === q)
+               || t.find(x => x.name && low(x.name) === q)
+               || t.find(x => (x.name && low(x.name).includes(q)) ||
+                              (x.branch && low(x.branch).includes(q)) ||
+                              (x.hash && low(x.hash).startsWith(q)));
+      if (hit) return hit;
+    }
+    return null;
   }
 
   /* ---- scrolling -------------------------------------------------------
@@ -1269,6 +1318,16 @@ class Component extends DCLogic {
   }
 
   cmdCheckout(ref) {
+    if (/^--?detach$/i.test(String(ref).trim())) {
+      if (!this.scene || !this.majorNodes || !this.majorNodes.length) {
+        this.cprint('<span class="cj-warn">fatal: no scene loaded, cannot detach.</span>');
+        return;
+      }
+      this.cprint('<span class="cj-dim">You are in \'detached HEAD\' state. Look around, click a node to reattach.</span>');
+      this.toggleConsole(false);
+      this.detachHead();
+      return;
+    }
     if (!ref) { this.cprint('<span class="cj-dim">usage: git checkout &lt;branch|hash|name|1-6|head&gt;</span>'); return; }
     const t = this.resolveRef(ref);
     if (!t) {
@@ -1278,6 +1337,12 @@ class Component extends DCLogic {
     }
     const label = t.branch || (t.kind === 'head' ? 'parth/main' : t.name);
     this.cprint("<span class=\"cj-dim\">Switched to branch </span><span class=\"cj-cy\">'" + this.cesc(label) + "'</span>");
+    if (this.detached) {
+      // reattaching restarts Lenis and then jumps; jumpTo on its own would be
+      // swallowed, because a stopped Lenis ignores scrollTo
+      this.attachHead(t);
+      return;
+    }
     this.setBranchLabel(label);
     this.jumpTo(t);
     this.flare(t.kind === 'head' ? 0.9 : 0.5);
@@ -1296,6 +1361,11 @@ class Component extends DCLogic {
   }
 
   cmdStatus() {
+    if (this.detached) {
+      this.cprint('<span class="cj-warn">HEAD detached at </span><span class="cj-acc">parth/main</span>');
+      this.cprint('<span class="cj-dim">nothing to commit, working tree clean</span>');
+      return;
+    }
     const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
     const pct = Math.round((window.scrollY / max) * 100);
     let here = 'Hero';
@@ -1461,6 +1531,174 @@ class Component extends DCLogic {
     r.intent = i;
     r.intentUntil = performance.now() + 1800;   // a touch over the 1.6s scroll
     this.scrollToY(r.stops[i].y);
+  }
+
+  /* ======================================================================
+     DETACHED HEAD
+     ----------------------------------------------------------------------
+     The reward for reading to the very bottom. The closing line already said
+     "HEAD detached at parth/main"; clicking it makes that true. The camera
+     comes off the scroll rail, the 2D page fades away, and you are left
+     orbiting the whole commit graph you just travelled down.
+
+     It stays useful rather than ornamental: the merge nodes are still live
+     out there, so clicking one reattaches HEAD and drops you on that project.
+     `git checkout --detach` in the console does the same thing, and is
+     deliberately absent from `help` and from tab completion.
+     ====================================================================== */
+
+  initDetach() {
+    const t = document.querySelector('[data-cj-detach]');
+    if (t) {
+      t.addEventListener('click', () => this.detachHead());
+      t.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.detachHead(); }
+      });
+    }
+    const back = document.querySelector('[data-cj-reattach]');
+    if (back) back.addEventListener('click', () => this.attachHead());
+  }
+
+  // centre and radius of everything worth looking at, measured once
+  graphFrame() {
+    if (this._frame) return this._frame;
+    const THREE = this.THREE;
+    const box = new THREE.Box3().setFromPoints(this.curve.getPoints(80));
+    this.majorNodes.forEach(n => box.expandByPoint(n.position));
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = box.getBoundingSphere(new THREE.Sphere()).radius;
+    this._frame = { center, radius };
+    return this._frame;
+  }
+
+  detachHead() {
+    if (this.detached) return;
+    if (!this.scene || !this.curve || !this.majorNodes || !this.majorNodes.length) return;  // 3D never loaded
+    this.detached = true;
+
+    const f = this.graphFrame();
+    // start the orbit exactly where the camera already is, so detaching is a
+    // pull-back rather than a cut
+    const off = this.camera.position.clone().sub(f.center);
+    const len = Math.max(0.001, off.length());
+    this.orb = {
+      theta: Math.atan2(off.x, off.z),
+      phi: Math.asin(Math.max(-1, Math.min(1, off.y / len))),
+      radius: len,
+      targetRadius: f.radius * 2.05,
+      phiTarget: 0.3,      // eases to a 3/4 view until the visitor takes the wheel
+      touched: false,
+      dragging: false,
+      moved: 0
+    };
+
+    document.body.classList.add('cj-detached');
+    this.setBranchLabel('HEAD detached');
+    if (this.lenis) this.lenis.stop();
+    // the graph is 40+ units deep, so the travelling fog would swallow the far
+    // end of it from out here
+    if (this.scene.fog) {
+      this._fog0 = this.scene.fog.density;
+      if (window.gsap) window.gsap.to(this.scene.fog, { density: 0.0034, duration: 1.4, ease: 'power2.out', overwrite: true });
+      else this.scene.fog.density = 0.0034;
+    }
+    this.bindOrbit();
+    this.flare(0.7);
+  }
+
+  attachHead(target) {
+    if (!this.detached) return;
+    this.detached = false;
+    document.body.classList.remove('cj-detached');
+    this.unbindOrbit();
+    if (this.scene.fog && this._fog0 != null) {
+      if (window.gsap) window.gsap.to(this.scene.fog, { density: this._fog0, duration: 1.2, ease: 'power2.out', overwrite: true });
+      else this.scene.fog.density = this._fog0;
+    }
+    if (this.lenis) this.lenis.start();
+    if (target) this.jumpTo(target);
+    // the rail owns the branch readout again; nudge it to repaint
+    if (this._rail) { this._rail.active = -1; this.updateRail(); }
+    else this.setBranchLabel('parth/main');
+    if (target) this.flare(0.5);
+  }
+
+  bindOrbit() {
+    const el = this.renderer.domElement;
+    const px = (e) => ({ x: e.clientX, y: e.clientY });
+
+    this._orbDown = (e) => {
+      const p = px(e);
+      this.orb.dragging = true; this.orb.touched = true; this.orb.moved = 0;
+      this.orb.lx = p.x; this.orb.ly = p.y;
+      if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch (err) {} }
+      el.style.cursor = 'grabbing';
+    };
+    this._orbMove = (e) => {
+      if (!this.orb || !this.orb.dragging) return;
+      const p = px(e);
+      const dx = p.x - this.orb.lx, dy = p.y - this.orb.ly;
+      this.orb.lx = p.x; this.orb.ly = p.y;
+      this.orb.moved += Math.abs(dx) + Math.abs(dy);
+      this.orb.theta -= dx * 0.005;
+      this.orb.phi = Math.max(-1.15, Math.min(1.15, this.orb.phi + dy * 0.005));
+    };
+    this._orbUp = (e) => {
+      if (!this.orb) return;
+      const wasDrag = this.orb.dragging;
+      this.orb.dragging = false;
+      el.style.cursor = 'grab';
+      if (wasDrag && this.orb.moved < 6) this.pickDetached(e);   // a tap, not a drag
+    };
+    this._orbWheel = (e) => {
+      if (!this.orb) return;
+      e.preventDefault();                      // also what keeps the page from scrolling under us
+      const f = this.graphFrame();
+      this.orb.targetRadius = Math.max(f.radius * 0.5, Math.min(f.radius * 4, this.orb.targetRadius + e.deltaY * 0.045));
+    };
+
+    el.addEventListener('pointerdown', this._orbDown);
+    window.addEventListener('pointermove', this._orbMove);
+    window.addEventListener('pointerup', this._orbUp);
+    window.addEventListener('pointercancel', this._orbUp);
+    window.addEventListener('wheel', this._orbWheel, { passive: false });
+    el.style.cursor = 'grab';
+  }
+
+  unbindOrbit() {
+    const el = this.renderer && this.renderer.domElement;
+    if (el && this._orbDown) el.removeEventListener('pointerdown', this._orbDown);
+    if (this._orbMove) window.removeEventListener('pointermove', this._orbMove);
+    if (this._orbUp) { window.removeEventListener('pointerup', this._orbUp); window.removeEventListener('pointercancel', this._orbUp); }
+    if (this._orbWheel) window.removeEventListener('wheel', this._orbWheel);
+    if (el) el.style.cursor = '';
+    this._orbDown = this._orbMove = this._orbUp = this._orbWheel = null;
+  }
+
+  // a tap out in the void: if it landed on a merge node, reattach there
+  pickDetached(e) {
+    this._ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
+    this._ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    this._ray.setFromCamera(this._ndc, this.camera);
+    const hit = this._ray.intersectObjects(this.majorNodes, false)[0];
+    if (!hit) return;
+    const label = hit.object.userData.label || '';
+    this.attachHead(/^HEAD/i.test(label) ? { kind: 'head' } : this.resolveRef(label));
+  }
+
+  updateDetached(dt) {
+    const f = this.graphFrame(), o = this.orb;
+    if (!o.dragging && !this.reduced) o.theta += dt * 0.075;          // idle drift
+    if (!o.touched) o.phi += (o.phiTarget - o.phi) * 0.05;            // settle into a 3/4 view
+    o.radius += (o.targetRadius - o.radius) * 0.07;
+    const cp = Math.cos(o.phi), r = o.radius;
+    this._camTarget.set(
+      f.center.x + r * cp * Math.sin(o.theta),
+      f.center.y + r * Math.sin(o.phi),
+      f.center.z + r * cp * Math.cos(o.theta)
+    );
+    this.camera.position.lerp(this._camTarget, this.reduced ? 1 : 0.09);
+    this.camera.lookAt(f.center);
   }
 
   onResize() {
