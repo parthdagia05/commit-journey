@@ -42,6 +42,25 @@
   @keyframes cjBounce{ 0%,100%{ transform:translateY(0); opacity:.5 } 50%{ transform:translateY(7px); opacity:1 } }
   @keyframes cjFloat{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
   @keyframes cjGrain{ 0%{transform:translate(0,0)} 10%{transform:translate(-3%,-4%)} 30%{transform:translate(2%,-2%)} 50%{transform:translate(-2%,3%)} 70%{transform:translate(3%,2%)} 90%{transform:translate(-1%,-3%)} 100%{transform:translate(0,0)} }
+  /* ---- git console (⌘K) ------------------------------------------------ */
+  #cj-console{ position:fixed; z-index:70; left:50%; bottom:26px; width:min(760px,92vw); transform:translate(-50%,16px); opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s cubic-bezier(.2,.9,.3,1); }
+  #cj-console.is-open{ opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+  .cj-con-shell{ background:rgba(13,17,23,.95); border:1px solid var(--cj-slate); border-radius:11px; box-shadow:0 26px 80px rgba(0,0,0,.66), 0 0 0 1px rgba(57,211,83,.06); backdrop-filter:blur(12px); overflow:hidden; font-family:'JetBrains Mono',monospace; }
+  .cj-con-bar{ display:flex; align-items:center; gap:9px; padding:9px 13px; border-bottom:1px solid #1b2029; font-size:10.5px; letter-spacing:.11em; color:var(--cj-dim); }
+  .cj-con-bar b{ font-weight:400; color:#4d5560; margin-left:auto; letter-spacing:.06em; }
+  .cj-con-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; }
+  #cj-console-out{ max-height:42vh; overflow-y:auto; overscroll-behavior:contain; padding:13px 15px; font-size:12.5px; line-height:1.72; color:#c9d1d9; }
+  #cj-console-out > div{ white-space:pre-wrap; word-break:break-word; }
+  .cj-con-row{ display:flex; align-items:center; gap:9px; padding:11px 15px; border-top:1px solid #1b2029; }
+  #cj-console-in{ flex:1; min-width:0; background:none; border:0; outline:0; padding:0; color:var(--cj-text); font:inherit; font-size:13px; caret-color:var(--cj-accent); }
+  #cj-console-in::placeholder{ color:#4d5560; }
+  .cj-dim{ color:var(--cj-dim); } .cj-acc{ color:var(--cj-accent); } .cj-cy{ color:var(--cj-cyan); } .cj-warn{ color:#F0883E; }
+  .cj-jump{ color:var(--cj-text); cursor:pointer; border-bottom:1px dotted #30363d; }
+  .cj-jump:hover{ color:var(--cj-accent); border-bottom-color:var(--cj-accent); }
+  #cj-console-hint{ pointer-events:auto; display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:10.5px; letter-spacing:.08em; color:var(--cj-dim); background:rgba(13,17,23,.6); border:1px solid #1b2029; border-radius:6px; padding:4px 9px; cursor:pointer; transition:color .18s ease, border-color .18s ease; }
+  #cj-console-hint:hover{ color:var(--cj-text); border-color:var(--cj-slate); }
+  #cj-console-hint kbd{ font:inherit; color:var(--cj-accent); }
+  @media (max-width:640px){ #cj-console-hint span{ display:none; } }
 </style>
 </helmet>
 <div id="cj-app" style="position:relative; width:100%; min-height:100vh;">
@@ -52,6 +71,9 @@
   <!-- cinematic vignette + film grain (CSS, cheap & reliable) -->
   <div id="cj-vignette" style="position:fixed; inset:0; z-index:40; pointer-events:none; background:radial-gradient(120% 90% at 50% 42%, transparent 48%, rgba(4,4,8,.55) 86%, rgba(2,2,5,.9) 100%);"></div>
   <div id="cj-grain" style="position:fixed; inset:-50%; z-index:41; pointer-events:none; opacity:.05; mix-blend-mode:overlay; background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22160%22 height=%22160%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.85%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/></svg>'); animation:cjGrain 8s steps(6) infinite;"></div>
+
+  <!-- console flare flash (git push easter egg) -->
+  <div id="cj-flash" style="position:fixed; inset:0; z-index:42; pointer-events:none; opacity:0; background:radial-gradient(circle at 50% 55%, rgba(57,211,83,.5), rgba(57,211,83,0) 62%);"></div>
 
   <!-- top scroll progress -->
   <div style="position:fixed; top:0; left:0; right:0; height:2px; z-index:55; background:rgba(255,255,255,.04);">
@@ -66,6 +88,7 @@
       <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--cj-dim);">@parthdagia05</span>
     </a>
     <div style="display:flex; align-items:center; gap:18px; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.08em;">
+      <button id="cj-console-hint" type="button" title="Open the git console"><kbd>⌘K</kbd><span>console</span></button>
       <span id="cj-branch-label" style="color:var(--cj-dim);">git:(<span style="color:var(--cj-accent);">main</span>)</span>
       <div style="display:flex; align-items:center; gap:7px;">
         <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--cj-accent); box-shadow:0 0 8px var(--cj-accent); animation:cjFloat 3s ease-in-out infinite;"></span>
@@ -77,6 +100,24 @@
   <!-- 3D node hover tooltip -->
   <div id="cj-tooltip" style="position:fixed; top:0; left:0; z-index:60; pointer-events:none; opacity:0; transition:opacity .18s ease; will-change:transform; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-text); background:rgba(13,17,23,.92); border:1px solid var(--cj-slate); border-radius:7px; padding:8px 12px; box-shadow:0 8px 30px rgba(0,0,0,.5); backdrop-filter:blur(6px); white-space:nowrap;">
     <span style="color:var(--cj-accent); margin-right:6px;">●</span><span data-tip-title>node</span>
+  </div>
+
+  <!-- ===== GIT CONSOLE (⌘K) ===== -->
+  <div id="cj-console" role="dialog" aria-label="git console" aria-modal="false">
+    <div class="cj-con-shell">
+      <div class="cj-con-bar">
+        <span class="cj-con-dot" style="background:#F0883E;"></span>
+        <span class="cj-con-dot" style="background:var(--cj-cyan);"></span>
+        <span class="cj-con-dot" style="background:var(--cj-accent);"></span>
+        <span style="margin-left:5px;">parth@commit-journey</span>
+        <b>esc to close</b>
+      </div>
+      <div id="cj-console-out" data-lenis-prevent></div>
+      <div class="cj-con-row">
+        <span class="cj-acc" style="font-size:13px;">$</span>
+        <input id="cj-console-in" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="git log  ·  git checkout kubescape  ·  help">
+      </div>
+    </div>
   </div>
 
   <!-- ===== SCROLLING OVERLAY CONTENT (drives scroll height) ===== -->
@@ -320,6 +361,7 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.disposed = false;
+    this._shake = 0;
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.mobile = window.innerWidth < 768;
 
@@ -328,6 +370,10 @@ class Component extends DCLogic {
     this.bloomStrength = (this.props.bloom != null ? this.props.bloom : 0.72);
     this.showParticles = (this.props.particles != null ? this.props.particles : true);
     document.documentElement.style.setProperty('--cj-accent', this.accent);
+
+    // The git console is plain DOM, so it comes up before the 3D does and
+    // still works if Three.js or the CDN never arrives.
+    this.initConsole();
 
     // wait for the UMD libs (gsap/ScrollTrigger/Lenis) to finish loading, then boot
     this.waitForLibs().then(() => this.boot()).catch(e => console.warn('[CommitJourney] boot failed', e));
@@ -360,6 +406,7 @@ class Component extends DCLogic {
     try { if (window.ScrollTrigger) window.ScrollTrigger.getAll().forEach(t => t.kill()); } catch (e) {}
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointermove', this._onPointer);
+    if (this._onConsoleHotkey) window.removeEventListener('keydown', this._onConsoleHotkey);
   }
 
   waitForLibs() {
@@ -841,6 +888,13 @@ class Component extends DCLogic {
         .addScaledVector(this._side, 1.05 + this.parallax.x * 0.7)
         .addScaledVector(this._worldUp, 0.55 + this.parallax.y * 0.5)
         .addScaledVector(this._tan, -0.7);
+      // console flare shake: a decaying jitter on the camera target only, so
+      // nothing in the DOM has to move for it
+      if (this._shake > 0.001) {
+        this._camTarget.x += (Math.random() - 0.5) * this._shake;
+        this._camTarget.y += (Math.random() - 0.5) * this._shake;
+        this._shake *= 0.90;
+      }
       this.camera.position.lerp(this._camTarget, this.reduced ? 1 : 0.10);
       this.camera.lookAt(this._look);
 
@@ -901,6 +955,356 @@ class Component extends DCLogic {
     this._ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
     this.parallax.tx = this._ndc.x;
     this.parallax.ty = this._ndc.y;
+  }
+
+  /* ======================================================================
+     GIT CONSOLE  (⌘K / Ctrl-K, or "/")
+     ----------------------------------------------------------------------
+     A working command line over the page: `git log` lists the merge points,
+     `git checkout <ref>` flies the camera to one, `git show` prints a slab's
+     stack and summary. Every command reads its data back out of the project
+     markup, so editing a slab updates the console too and there is no second
+     copy of the content to keep in sync.
+
+     It boots before Three.js, so the page stays navigable by keyboard even
+     if the 3D never loads; the flourishes it triggers are all null-guarded
+     for that case.
+     ====================================================================== */
+
+  initConsole() {
+    if (this._con) return;
+    const root = document.getElementById('cj-console');
+    const out = document.getElementById('cj-console-out');
+    const input = document.getElementById('cj-console-in');
+    if (!root || !out || !input) return;
+    this._con = { root, out, input, hist: [], hpos: 0, opened: false };
+
+    input.addEventListener('keydown', (e) => this.onConsoleKey(e));
+    // clicking a hash / branch in the scrollback checks it out
+    out.addEventListener('click', (e) => {
+      const j = e.target.closest('.cj-jump');
+      if (!j) return;
+      const line = 'git checkout ' + j.getAttribute('data-ref');
+      this.cprint('<span class="cj-acc">$</span> ' + this.cesc(line));
+      this.runCommand(line);
+    });
+
+    const hint = document.getElementById('cj-console-hint');
+    if (hint) hint.addEventListener('click', () => this.toggleConsole());
+
+    this._onConsoleHotkey = (e) => {
+      const tag = (e.target && e.target.tagName || '').toLowerCase();
+      const typing = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.toggleConsole(); return; }
+      if (e.key === 'Escape' && this._con.open) { e.preventDefault(); this.toggleConsole(false); return; }
+      if (e.key === '/' && !typing && !this._con.open) { e.preventDefault(); this.toggleConsole(true); }
+    };
+    window.addEventListener('keydown', this._onConsoleHotkey);
+  }
+
+  toggleConsole(force) {
+    const c = this._con;
+    if (!c) return;
+    const open = (force == null ? !c.open : !!force);
+    c.open = open;
+    c.root.classList.toggle('is-open', open);
+    if (!open) { c.input.blur(); return; }
+    if (!c.opened) { c.opened = true; this.consoleBanner(); }
+    c.input.focus();
+  }
+
+  consoleBanner() {
+    this.cprint('<span class="cj-dim">Interactive git console. This one is real - it drives the page.</span>');
+    this.cprint('<span class="cj-dim">Try </span><span class="cj-acc">git log</span><span class="cj-dim">, </span><span class="cj-acc">git checkout wasmedge</span><span class="cj-dim">, or </span><span class="cj-acc">help</span><span class="cj-dim">.</span>');
+  }
+
+  /* ---- scrollback ------------------------------------------------------- */
+  cesc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  }
+
+  cprint(html, indent) {
+    const c = this._con;
+    if (!c) return;
+    const d = document.createElement('div');
+    if (indent) d.style.paddingLeft = indent + 'px';
+    d.innerHTML = html;
+    c.out.appendChild(d);
+    c.out.scrollTop = c.out.scrollHeight;
+  }
+
+  /* ---- what the console can navigate to --------------------------------
+     Read fresh on every command so edits to the markup are picked up.      */
+  consoleTargets() {
+    const targets = [];
+    document.querySelectorAll('.cj-project').forEach((art, i) => {
+      const line = Array.from(art.querySelectorAll('div')).find(d => /^commit\s/i.test(d.textContent.trim()));
+      const spans = line ? line.querySelectorAll('span') : [];
+      const h3 = art.querySelector('h3'), p = art.querySelector('p'), a = art.querySelector('a[href]');
+      targets.push({
+        kind: 'commit', n: i + 1, el: art,
+        name: h3 ? h3.textContent.trim() : 'project ' + (i + 1),
+        hash: spans[0] ? spans[0].textContent.trim() : '',
+        branch: spans[1] ? spans[1].textContent.trim().replace(/['"]/g, '') : '',
+        desc: p ? p.textContent.trim() : '',
+        url: a ? a.getAttribute('href') : '',
+        stack: Array.from(art.querySelectorAll('span')).filter(s => s.style.borderRadius === '20px').map(s => s.textContent.trim())
+      });
+    });
+    document.querySelectorAll('[data-screen-label]').forEach(sec => {
+      targets.push({ kind: 'section', el: sec, name: sec.getAttribute('data-screen-label'), branch: '', hash: '' });
+    });
+    return targets;
+  }
+
+  resolveRef(ref) {
+    const q = String(ref || '').toLowerCase().replace(/^['"]|['"]$/g, '').trim();
+    if (!q) return null;
+    if (q === 'head' || q === 'main' || q === 'parth/main') return { kind: 'head', name: 'parth/main' };
+    const t = this.consoleTargets();
+    if (/^\d+$/.test(q)) return t.find(x => x.kind === 'commit' && x.n === parseInt(q, 10)) || null;
+    const low = (s) => String(s || '').toLowerCase();
+    return t.find(x => low(x.hash) === q)
+        || t.find(x => low(x.branch) === q)
+        || t.find(x => low(x.name) === q)
+        || t.find(x => low(x.name).includes(q) || low(x.branch).includes(q) || low(x.hash).startsWith(q))
+        || null;
+  }
+
+  /* ---- scrolling -------------------------------------------------------
+     Hand the target to Lenis when it is running so the camera easing in the
+     render loop stays in step with the page; otherwise fall back to the
+     browser (also the reduced-motion path, which jumps instead of gliding). */
+  scrollToY(y) {
+    const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    y = Math.max(0, Math.min(max, y));
+    if (this.lenis) this.lenis.scrollTo(y, { duration: 1.6, easing: (t) => 1 - Math.pow(1 - t, 3) });
+    else window.scrollTo({ top: y, behavior: this.reduced ? 'auto' : 'smooth' });
+  }
+
+  jumpTo(target) {
+    if (!target) return;
+    if (target.kind === 'head') { this.scrollToY(document.documentElement.scrollHeight); return; }
+    const top = target.el.getBoundingClientRect().top + window.scrollY;
+    // a project slab is one viewport tall, so centre it; a section can be many
+    this.scrollToY(target.kind === 'commit' ? top + target.el.offsetHeight / 2 - window.innerHeight / 2 : top);
+  }
+
+  setBranchLabel(name) {
+    const el = document.getElementById('cj-branch-label');
+    if (el) el.innerHTML = 'git:(<span style="color:var(--cj-accent);">' + this.cesc(name) + '</span>)';
+  }
+
+  /* ---- the 3D flourish -------------------------------------------------- */
+  flare(strength) {
+    strength = strength == null ? 1 : strength;
+    const flash = document.getElementById('cj-flash');
+    if (flash && window.gsap && !this.reduced) {
+      window.gsap.fromTo(flash, { opacity: 0.34 * strength }, { opacity: 0, duration: 0.9, ease: 'power2.out', overwrite: true });
+    }
+    if (this.bloomPass && window.gsap && !this.reduced) {
+      window.gsap.fromTo(this.bloomPass, { strength: this.bloomStrength + 1.5 * strength },
+        { strength: this.bloomStrength, duration: 1.2, ease: 'power2.out', overwrite: true });
+    }
+    if (!this.reduced) this._shake = 0.16 * strength;
+  }
+
+  /* ---- input handling --------------------------------------------------- */
+  onConsoleKey(e) {
+    const c = this._con, input = c.input;
+    // the field swallows key events below, so the two global hotkeys are
+    // re-handled here rather than lost
+    if (e.key === 'Escape' || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
+      e.preventDefault(); e.stopPropagation(); this.toggleConsole(false); return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const line = input.value.trim();
+      input.value = '';
+      if (!line) return;
+      c.hist.push(line); c.hpos = c.hist.length;
+      this.cprint('<span class="cj-acc">$</span> ' + this.cesc(line));
+      this.runCommand(line);
+      return;
+    }
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      if (!c.hist.length) return;
+      e.preventDefault();
+      c.hpos = Math.max(0, Math.min(c.hist.length, c.hpos + (e.key === 'ArrowUp' ? -1 : 1)));
+      input.value = c.hist[c.hpos] || '';
+      input.setSelectionRange(input.value.length, input.value.length);
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const v = input.value;
+      const hit = this.CONSOLE_COMMANDS.find(cmd => cmd.startsWith(v) && cmd !== v);
+      if (hit) input.value = hit.endsWith(' ') ? hit : hit + ' ';
+      else if (/^(git checkout|git show|checkout|cd)\s+\S*$/.test(v)) {
+        const q = v.split(/\s+/).pop().toLowerCase();
+        const t = this.consoleTargets().find(x => x.kind === 'commit' && (x.branch.toLowerCase().startsWith(q) || x.name.toLowerCase().startsWith(q)));
+        if (t) input.value = v.slice(0, v.length - q.length) + t.branch;
+      }
+      return;
+    }
+    // keep page hotkeys out of the field
+    e.stopPropagation();
+  }
+
+  get CONSOLE_COMMANDS() {
+    return ['help', 'git log', 'git checkout ', 'git show ', 'git status', 'git branch', 'git remote -v',
+            'git diff', 'git blame', 'git push --force', 'git pull', 'whoami', 'clear', 'exit'];
+  }
+
+  /* ---- the commands ------------------------------------------------------ */
+  runCommand(raw) {
+    const line = String(raw).trim();
+    const argv = line.split(/\s+/);
+    const cmd = argv[0].toLowerCase();
+    const sub = (argv[1] || '').toLowerCase();
+    const rest = argv.slice(2).join(' ');
+    const P = (h, i) => this.cprint(h, i);
+
+    // non-git shorthands people actually try
+    if (cmd === 'clear' || cmd === 'cls') { this._con.out.innerHTML = ''; return; }
+    if (cmd === 'exit' || cmd === 'quit' || cmd === 'q' || cmd === ':q') { this.toggleConsole(false); return; }
+    if (cmd === 'help' || cmd === '?' || cmd === 'man') return this.cmdHelp();
+    if (cmd === 'whoami') {
+      P('<span style="color:var(--cj-text);">Parth Dagia</span> <span class="cj-dim">&lt;@parthdagia05&gt;</span>');
+      P('<span class="cj-dim">Compilers, runtimes and cloud-native infrastructure. GSoC 2026 contributor and Sugar Labs maintainer.</span>');
+      return;
+    }
+    if (cmd === 'ls' || cmd === 'dir') return this.cmdLog();
+    if (cmd === 'cd' || cmd === 'goto' || cmd === 'open') return this.cmdCheckout(argv.slice(1).join(' '));
+    if (cmd === 'sudo') {
+      P('<span class="cj-warn">parth is not in the sudoers file. This incident has been reported.</span>');
+      return;
+    }
+    if (cmd !== 'git') {
+      P('<span class="cj-dim">' + this.cesc(cmd) + ': command not found. Try </span><span class="cj-acc">help</span><span class="cj-dim">.</span>');
+      return;
+    }
+
+    switch (sub) {
+      case 'log': case 'shortlog': return this.cmdLog();
+      case 'checkout': case 'switch': return this.cmdCheckout(argv.slice(2).join(' '));
+      case 'show': return this.cmdShow(rest);
+      case 'status': return this.cmdStatus();
+      case 'branch': return this.cmdBranch();
+      case 'remote': return this.cmdRemote();
+      case 'diff':
+        P('<span class="cj-dim">diff --git a/visitor b/visitor</span>');
+        P('<span style="color:#f85149;">- just scrolling</span>');
+        P('<span class="cj-acc">+ reading the source</span>');
+        return;
+      case 'blame':
+        P('<span class="cj-dim">' + this.cesc(new Date().toISOString().slice(0, 10)) + ' (Parth Dagia) every line on this page</span>');
+        return;
+      case 'pull': P('<span class="cj-dim">Already up to date.</span>'); return;
+      case 'commit': P('<span class="cj-dim">nothing to commit, working tree clean</span>'); return;
+      case 'push': return this.cmdPush(line);
+      case 'stash': P('<span class="cj-dim">Saved working directory. Nothing was actually stashed, this is a portfolio.</span>'); return;
+      case '': P('<span class="cj-dim">usage: git &lt;command&gt;. See </span><span class="cj-acc">help</span><span class="cj-dim">.</span>'); return;
+      default:
+        P("<span class=\"cj-dim\">git: '" + this.cesc(sub) + "' is not a git command. See </span><span class=\"cj-acc\">help</span><span class=\"cj-dim\">.</span>");
+    }
+  }
+
+  cmdHelp() {
+    const rows = [
+      ['git log', 'list every merge point in this history'],
+      ['git checkout <ref>', 'fly the camera to a commit (name, branch, hash or 1-6)'],
+      ['git show <ref>', 'print that commit: stack, summary, upstream link'],
+      ['git status', 'where you are in the history right now'],
+      ['git branch', 'the branches that merged into main'],
+      ['git remote -v', 'how to reach Parth'],
+      ['git push --force', 'do not'],
+      ['clear / exit', 'clear the scrollback / close the console']
+    ];
+    rows.forEach(([c, d]) => this.cprint('<span class="cj-acc">' + this.cesc(c) + '</span>' +
+      '<span class="cj-dim">' + '&nbsp;'.repeat(Math.max(2, 22 - c.length)) + this.cesc(d) + '</span>'));
+    this.cprint('<span class="cj-dim">Tab completes, ↑/↓ walks history, hashes in the output are clickable.</span>');
+  }
+
+  cmdLog() {
+    const t = this.consoleTargets().filter(x => x.kind === 'commit');
+    if (!t.length) { this.cprint('<span class="cj-dim">no commits yet</span>'); return; }
+    this.cprint('<span class="cj-acc">*</span> <span class="cj-warn">HEAD</span> <span class="cj-dim">-&gt; parth/main</span>');
+    t.slice().reverse().forEach(x => {
+      this.cprint('<span class="cj-dim">|</span>');
+      this.cprint('<span class="cj-acc">*</span> <span class="cj-warn cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.hash) + '</span> ' +
+        '<span class="cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.name) + '</span> ' +
+        '<span class="cj-cy">(' + this.cesc(x.branch) + ')</span>');
+    });
+    this.cprint('<span class="cj-dim">|</span>');
+    this.cprint('<span class="cj-acc">*</span> <span class="cj-dim">git init ~/parth</span>');
+  }
+
+  cmdCheckout(ref) {
+    if (!ref) { this.cprint('<span class="cj-dim">usage: git checkout &lt;branch|hash|name|1-6|head&gt;</span>'); return; }
+    const t = this.resolveRef(ref);
+    if (!t) {
+      this.cprint("<span class=\"cj-warn\">error: pathspec '" + this.cesc(ref) + "' did not match any commit known to this history.</span>");
+      this.cprint('<span class="cj-dim">Run </span><span class="cj-acc">git log</span><span class="cj-dim"> to see what is here.</span>');
+      return;
+    }
+    const label = t.branch || (t.kind === 'head' ? 'parth/main' : t.name);
+    this.cprint("<span class=\"cj-dim\">Switched to branch </span><span class=\"cj-cy\">'" + this.cesc(label) + "'</span>");
+    this.setBranchLabel(label);
+    this.jumpTo(t);
+    this.flare(t.kind === 'head' ? 0.9 : 0.5);
+  }
+
+  cmdShow(ref) {
+    const t = ref ? this.resolveRef(ref) : this.consoleTargets().filter(x => x.kind === 'commit')[0];
+    if (!t || t.kind !== 'commit') { this.cprint('<span class="cj-dim">usage: git show &lt;branch|hash|name|1-6&gt;</span>'); return; }
+    this.cprint('<span class="cj-warn">commit ' + this.cesc(t.hash) + '</span> <span class="cj-cy">(' + this.cesc(t.branch) + ')</span>');
+    this.cprint('<span class="cj-dim">Author: Parth Dagia &lt;@parthdagia05&gt;</span>');
+    this.cprint('&nbsp;');
+    this.cprint('<span class="cj-acc">' + this.cesc(t.name) + '</span>', 16);
+    if (t.stack.length) this.cprint('<span class="cj-dim">' + this.cesc(t.stack.join('  ·  ')) + '</span>', 16);
+    if (t.desc) this.cprint('<span class="cj-dim">' + this.cesc(t.desc) + '</span>', 16);
+    if (t.url) this.cprint('<a href="' + this.cesc(t.url) + '" target="_blank" rel="noopener" class="cj-cy">' + this.cesc(t.url) + '</a>', 16);
+  }
+
+  cmdStatus() {
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const pct = Math.round((window.scrollY / max) * 100);
+    let here = 'Hero';
+    document.querySelectorAll('[data-screen-label]').forEach(s => {
+      const r = s.getBoundingClientRect();
+      if (r.top <= window.innerHeight * 0.5 && r.bottom > window.innerHeight * 0.5) here = s.getAttribute('data-screen-label');
+    });
+    this.cprint('<span class="cj-dim">On section </span><span class="cj-acc">' + this.cesc(here) + '</span><span class="cj-dim">, ' + pct + '% through the history</span>');
+    this.cprint('<span class="cj-dim">nothing to commit, working tree clean</span>');
+  }
+
+  cmdBranch() {
+    const t = this.consoleTargets().filter(x => x.kind === 'commit');
+    this.cprint('<span class="cj-acc">* parth/main</span>');
+    t.forEach(x => this.cprint('<span class="cj-cy cj-jump" data-ref="' + this.cesc(x.branch) + '">  ' + this.cesc(x.branch) + '</span>'));
+  }
+
+  cmdRemote() {
+    [['origin', 'https://github.com/parthdagia05', 'fetch'],
+     ['origin', 'https://github.com/parthdagia05', 'push']].forEach(([n, u, k]) => {
+      this.cprint('<span class="cj-acc">' + n + '</span>  <a href="' + u + '" target="_blank" rel="noopener" class="cj-cy">' + u + '</a> <span class="cj-dim">(' + k + ')</span>');
+    });
+  }
+
+  /* the one command that is pure theatre */
+  cmdPush(line) {
+    const forced = /--force|-f\b/.test(line);
+    const steps = [
+      '<span class="cj-dim">Enumerating objects: 6, done.</span>',
+      '<span class="cj-dim">Compressing objects: 100% (6/6), done.</span>',
+      '<span class="cj-dim">Writing objects: 100% (6/6), 4.04 MiB | 12.00 MiB/s, done.</span>',
+      forced ? '<span class="cj-warn">+ forced update</span> <span class="cj-dim">parth/main -&gt; parth/main</span>'
+             : '<span class="cj-dim">To github.com:parthdagia05/parth.git</span>',
+      '<span class="cj-acc">Everything up-to-date.</span> <span class="cj-dim">Now open a PR: the contact node is at the end.</span>'
+    ];
+    steps.forEach((s, i) => setTimeout(() => { if (!this.disposed) this.cprint(s); }, i * 160));
+    setTimeout(() => { if (!this.disposed) this.flare(forced ? 1.6 : 0.8); }, steps.length * 160);
   }
 
   onResize() {

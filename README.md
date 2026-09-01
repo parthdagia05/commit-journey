@@ -32,6 +32,28 @@ python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
+## The git console
+
+Press <kbd>⌘K</kbd> (<kbd>Ctrl</kbd>+<kbd>K</kbd>) or <kbd>/</kbd> and the page grows a
+working command line. It is the site's own navigation, not a gag:
+
+| Command | What it does |
+|---|---|
+| `git log` | the merge points as an oneline graph; every hash is clickable |
+| `git checkout <ref>` | flies the camera to that commit. Takes a branch, a hash, a project name, `1`-`6`, or `head` |
+| `git show <ref>` | that commit's stack, summary and upstream link |
+| `git status` | which section you are on and how far through the history |
+| `git branch`, `git remote -v`, `whoami` | the branch list, the links, the bio |
+| `git push --force` | not a navigation command |
+
+Tab completes commands and refs, <kbd>↑</kbd>/<kbd>↓</kbd> walks history, <kbd>esc</kbd> closes.
+
+Every command reads its data back out of the project markup, so there is no second
+copy of the content to keep in sync: edit a slab and the console follows. The console
+is plain DOM and boots before Three.js, so the page stays navigable by keyboard even
+if the 3D never loads, and the flourishes a command triggers (a bloom surge, a camera
+shake) are skipped when there is no scene and under `prefers-reduced-motion`.
+
 ## Content
 
 The six merge points are, in scroll order:
@@ -97,6 +119,9 @@ project, keep three things in sync:
 2. the section's `min-height` (100vh per project),
 3. the `PORTFOLIO.projects` array in the script, which supplies each node's hover
    label and which side (`-1` / `+1`) its branch bows to.
+
+The git console needs no update: it re-reads the slabs on every command, picking up
+each one's heading, hash, branch, stack chips and upstream link from the markup.
 
 The camera-path and scroll-sync logic is commented in the script.
 
