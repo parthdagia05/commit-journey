@@ -61,6 +61,22 @@
   #cj-console-hint:hover{ color:var(--cj-text); border-color:var(--cj-slate); }
   #cj-console-hint kbd{ font:inherit; color:var(--cj-accent); }
   @media (max-width:640px){ #cj-console-hint span{ display:none; } }
+  /* ---- commit rail (right-edge minimap of the graph) -------------------- */
+  #cj-rail{ position:fixed; right:24px; top:50%; transform:translateY(-50%); z-index:52; width:18px; height:46vh; min-height:280px; }
+  .cj-rail-track{ position:absolute; left:9px; top:0; bottom:0; width:1px; margin-left:-.5px; background:#1b2029; }
+  .cj-rail-fill{ position:absolute; left:0; top:0; width:100%; height:0; background:linear-gradient(180deg,var(--cj-cyan),var(--cj-accent)); box-shadow:0 0 9px var(--cj-accent); }
+  .cj-rail-node{ position:absolute; left:9px; width:22px; height:22px; margin:-11px 0 0 -11px; padding:0; border:0; background:none; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .cj-rail-dot{ width:6px; height:6px; border-radius:50%; background:#30363D; transition:background .2s ease, box-shadow .2s ease, transform .2s ease; }
+  .cj-rail-node:hover .cj-rail-dot{ background:var(--cj-text); transform:scale(1.35); }
+  .cj-rail-node.is-active .cj-rail-dot{ background:var(--cj-accent); box-shadow:0 0 10px var(--cj-accent); transform:scale(1.5); }
+  .cj-rail-node.is-edge .cj-rail-dot{ width:4px; height:4px; }
+  .cj-rail-label{ position:absolute; right:20px; white-space:nowrap; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.03em; color:var(--cj-dim); background:rgba(13,17,23,.94); border:1px solid #1b2029; border-radius:5px; padding:4px 9px; opacity:0; transform:translateX(5px); transition:opacity .18s ease, transform .18s ease; pointer-events:none; }
+  .cj-rail-label b{ font-weight:400; color:var(--cj-text); }
+  .cj-rail-node:hover .cj-rail-label, .cj-rail-node:focus-visible .cj-rail-label{ opacity:1; transform:none; }
+  .cj-rail-node:focus{ outline:none; }
+  .cj-rail-node:focus-visible .cj-rail-dot{ background:var(--cj-cyan); box-shadow:0 0 0 2px rgba(88,166,255,.4); }
+  @media (max-width:860px){ #cj-rail{ display:none; } }
+  @media (prefers-reduced-motion: reduce){ .cj-rail-dot, .cj-rail-label{ transition:none; } }
 </style>
 </helmet>
 <div id="cj-app" style="position:relative; width:100%; min-height:100vh;">
@@ -101,6 +117,11 @@
   <div id="cj-tooltip" style="position:fixed; top:0; left:0; z-index:60; pointer-events:none; opacity:0; transition:opacity .18s ease; will-change:transform; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--cj-text); background:rgba(13,17,23,.92); border:1px solid var(--cj-slate); border-radius:7px; padding:8px 12px; box-shadow:0 8px 30px rgba(0,0,0,.5); backdrop-filter:blur(6px); white-space:nowrap;">
     <span style="color:var(--cj-accent); margin-right:6px;">●</span><span data-tip-title>node</span>
   </div>
+
+  <!-- ===== COMMIT RAIL (right-edge minimap; nodes injected by initRail) ===== -->
+  <nav id="cj-rail" aria-label="Commit history">
+    <div class="cj-rail-track"><div class="cj-rail-fill"></div></div>
+  </nav>
 
   <!-- ===== GIT CONSOLE (⌘K) ===== -->
   <div id="cj-console" role="dialog" aria-label="git console" aria-modal="false">
@@ -374,6 +395,7 @@ class Component extends DCLogic {
     // The git console is plain DOM, so it comes up before the 3D does and
     // still works if Three.js or the CDN never arrives.
     this.initConsole();
+    this.initRail();
 
     // wait for the UMD libs (gsap/ScrollTrigger/Lenis) to finish loading, then boot
     this.waitForLibs().then(() => this.boot()).catch(e => console.warn('[CommitJourney] boot failed', e));
@@ -407,6 +429,9 @@ class Component extends DCLogic {
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointermove', this._onPointer);
     if (this._onConsoleHotkey) window.removeEventListener('keydown', this._onConsoleHotkey);
+    if (this._onRailScroll) window.removeEventListener('scroll', this._onRailScroll);
+    if (this._onRailTakeover) { window.removeEventListener('wheel', this._onRailTakeover); window.removeEventListener('touchstart', this._onRailTakeover); }
+    if (this._onRailResize) { window.removeEventListener('resize', this._onRailResize); window.removeEventListener('load', this._onRailResize); }
   }
 
   waitForLibs() {
@@ -997,7 +1022,10 @@ class Component extends DCLogic {
       const typing = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.toggleConsole(); return; }
       if (e.key === 'Escape' && this._con.open) { e.preventDefault(); this.toggleConsole(false); return; }
-      if (e.key === '/' && !typing && !this._con.open) { e.preventDefault(); this.toggleConsole(true); }
+      if (e.key === '/' && !typing && !this._con.open) { e.preventDefault(); this.toggleConsole(true); return; }
+      if ((e.key === 'j' || e.key === 'k') && !typing && !this._con.open && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault(); this.stepCommit(e.key === 'j' ? 1 : -1);
+      }
     };
     window.addEventListener('keydown', this._onConsoleHotkey);
   }
@@ -1305,6 +1333,134 @@ class Component extends DCLogic {
     ];
     steps.forEach((s, i) => setTimeout(() => { if (!this.disposed) this.cprint(s); }, i * 160));
     setTimeout(() => { if (!this.disposed) this.flare(forced ? 1.6 : 0.8); }, steps.length * 160);
+  }
+
+  /* ======================================================================
+     COMMIT RAIL
+     ----------------------------------------------------------------------
+     A minimap of the graph pinned to the right edge. Each dot sits at the
+     scroll position of the thing it points at, so the rail is a true scale
+     drawing of the page rather than an evenly spaced menu: the six merge
+     points really do cluster in the middle third of the history.
+
+     It shares its data and its scrolling with the console (consoleTargets /
+     scrollToY), so the two can never disagree about where a commit is, and
+     it drives the nav's git:(branch) readout as you pass each merge point.
+     ====================================================================== */
+
+  initRail() {
+    if (this._rail) return;
+    const el = document.getElementById('cj-rail');
+    const fill = el && el.querySelector('.cj-rail-fill');
+    if (!el || !fill) return;
+    this._rail = { el, fill, nodes: [], stops: [], active: -1 };
+
+    this.buildRail();
+
+    // one rAF-throttled listener: Lenis scrolls the window, so a plain scroll
+    // event covers smooth scrolling, wheel, keyboard and the console alike
+    this._onRailScroll = () => {
+      if (this._railTick) return;
+      this._railTick = requestAnimationFrame(() => { this._railTick = 0; this.updateRail(); });
+    };
+    this._onRailResize = () => { this.buildRail(); this.updateRail(); };
+    // taking over the scroll cancels a pending rail jump, so the next j/k
+    // counts from where the visitor actually is rather than where we were
+    // still heading. wheel/touch are the honest "they took over" signals; a
+    // scroll event alone is not, since our own animated jump fires those too.
+    this._onRailTakeover = () => { if (this._rail) this._rail.intent = null; };
+    window.addEventListener('wheel', this._onRailTakeover, { passive: true });
+    window.addEventListener('touchstart', this._onRailTakeover, { passive: true });
+    window.addEventListener('scroll', this._onRailScroll, { passive: true });
+    window.addEventListener('resize', this._onRailResize);
+    // section heights are in vh so layout settles early, but a late font or
+    // image swap can still move things
+    window.addEventListener('load', this._onRailResize);
+    this.updateRail();
+  }
+
+  /* every place the rail can send you, with the scroll offset that gets you
+     there. Measured fresh so it survives resizes and content edits. */
+  railStops() {
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const clamp = (y) => Math.max(0, Math.min(max, y));
+    const stops = [{ label: 'git init', sub: '~/parth', branch: 'parth/main', ref: '1', edge: true, y: 0 }];
+    this.consoleTargets().filter(x => x.kind === 'commit').forEach(c => {
+      const top = c.el.getBoundingClientRect().top + window.scrollY;
+      stops.push({
+        label: c.name, sub: c.branch, branch: c.branch, ref: c.hash || c.branch, edge: false,
+        y: clamp(top + c.el.offsetHeight / 2 - window.innerHeight / 2)
+      });
+    });
+    stops.push({ label: 'HEAD', sub: 'open a PR', branch: 'parth/main', ref: 'head', edge: true, y: max });
+    stops.forEach(s => { s.p = s.y / max; });
+    return stops;
+  }
+
+  buildRail() {
+    const r = this._rail;
+    if (!r) return;
+    r.stops = this.railStops();
+    r.nodes.forEach(n => n.remove());
+    r.nodes = r.stops.map((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cj-rail-node' + (s.edge ? ' is-edge' : '');
+      b.style.top = (s.p * 100).toFixed(3) + '%';
+      b.setAttribute('aria-label', s.label + (s.sub ? ' (' + s.sub + ')' : ''));
+      b.innerHTML = '<span class="cj-rail-dot"></span><span class="cj-rail-label"><b>' +
+        this.cesc(s.label) + '</b>' + (s.sub ? ' <span>' + this.cesc(s.sub) + '</span>' : '') + '</span>';
+      b.addEventListener('click', () => { this.railGoto(i); this.flare(0.35); });
+      r.el.appendChild(b);
+      return b;
+    });
+    r.active = -1;
+    r.intent = null;
+  }
+
+  updateRail() {
+    const r = this._rail;
+    if (!r || !r.stops.length) return;
+    const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const y = window.scrollY;
+    r.fill.style.height = (Math.max(0, Math.min(1, y / max)) * 100).toFixed(2) + '%';
+
+    let best = 0, bestD = Infinity;
+    r.stops.forEach((s, i) => { const d = Math.abs(s.y - y); if (d < bestD) { bestD = d; best = i; } });
+    if (best === r.active) return;                       // only touch the DOM on a real change
+    r.active = best;
+    if (r.intent != null && r.intent === best) r.intent = null;   // arrived
+    r.nodes.forEach((n, i) => n.classList.toggle('is-active', i === best));
+    this.setBranchLabel(r.stops[best].branch || 'parth/main');
+  }
+
+  // j / k step between merge points, the way they move in a pager
+  stepCommit(dir) {
+    const r = this._rail;
+    if (!r || !r.stops.length) return;
+    const from = this.railIndex();
+    const i = Math.max(0, Math.min(r.stops.length - 1, from + dir));
+    if (i !== from) this.railGoto(i);
+  }
+
+  /* Where a step counts from. A rail scroll is animated, so during one the
+     page is still somewhere between two stops and r.active (which tracks the
+     nearest) lags: stepping off it would make a quick j-j-j land one commit
+     down instead of three. While a rail scroll is in flight we count from the
+     stop we asked for instead, and fall back to the nearest once it settles
+     or as soon as the visitor scrolls for themselves. */
+  railIndex() {
+    const r = this._rail;
+    if (r.intent != null && performance.now() < r.intentUntil) return r.intent;
+    r.intent = null;
+    return r.active < 0 ? 0 : r.active;
+  }
+
+  railGoto(i) {
+    const r = this._rail;
+    r.intent = i;
+    r.intentUntil = performance.now() + 1800;   // a touch over the 1.6s scroll
+    this.scrollToY(r.stops[i].y);
   }
 
   onResize() {

@@ -32,6 +32,29 @@ python3 -m http.server 8000
 # then open http://localhost:8000/
 ```
 
+## The commit rail
+
+A minimap of the graph pinned to the right edge. Each dot sits at the scroll
+position of the thing it points at, so the rail is a scale drawing of the page
+rather than an evenly spaced menu: the six merge points really do cluster in the
+middle third. The line fills as you scroll, the nearest dot lights up, and the
+nav's `git:(branch)` readout follows it, so passing a merge point checks out
+that branch.
+
+Click any dot to jump. <kbd>j</kbd> and <kbd>k</kbd> step to the next and
+previous merge point.
+
+The rail shares `consoleTargets()` and `scrollToY()` with the console, so the
+two can never disagree about where a commit is, and it rebuilds itself on resize
+and on `load`. It is hidden below 860px, where there is no room for it.
+
+One wrinkle worth knowing if you touch `stepCommit`: a rail jump is animated, so
+during one the page sits between two stops and the nearest-dot tracker lags.
+Stepping off it would make a quick j-j-j land one commit down instead of three,
+so while a jump is in flight the next step counts from the stop that was asked
+for. A wheel or touch cancels that, because at the point the visitor takes over
+the scroll, where they are beats where we were heading.
+
 ## The git console
 
 Press <kbd>⌘K</kbd> (<kbd>Ctrl</kbd>+<kbd>K</kbd>) or <kbd>/</kbd> and the page grows a
