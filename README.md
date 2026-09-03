@@ -62,6 +62,66 @@ Notes for later:
 - It needs the scene, so it is the one feature that does nothing if WebGL or
   the CDN is unavailable. The trigger no-ops and the console command says so.
 
+## Cherry-pick a patch (also undocumented on the page)
+
+Every project slab opens with a line of body copy that reads
+
+```
+commit 9c4e1a · merge branch 'sugarlabs/musicblocks-v4'
+```
+
+Clicking it cherry-picks that commit onto a scratch branch. A staging pill
+appears bottom-left, the line grows an amber gutter marker, and that project's
+merge node lights amber out in the graph. Pick a few, press `git format-patch`,
+and the page writes them out as a real patch series: a `--cover-letter` whose
+body is the bio, the contact block and a shortlog, and whose diffstat
+insertion counts are the actual merged-PR numbers from `data/github.json`, then
+one patch per commit with its summary, stack and upstream.
+
+That makes it the one thing here that leaves the page. A visitor who only cares
+about the Go work picks two commits and walks away with a one-pager tailored to
+them: `copy` puts the plain text on their clipboard, `print / pdf` puts it on
+paper. It costs no backend and keeps no second copy of the content, because
+every line is read back out of the markup that is already on screen, so editing
+a slab edits the patch.
+
+The console equivalents are absent from `help` for the same reason
+`checkout --detach` is:
+
+| Command | What it does |
+|---|---|
+| `git cherry-pick <ref>...` | stage commits; takes anything `checkout` takes, plus `--all` |
+| `git format-patch` | open the sheet; `--stdout` prints it into the scrollback instead |
+| `git reset` | unstage everything |
+
+`git status` lists what is staged the way real git does, `git log` marks staged
+commits with `+` instead of `*` (borrowed from `--cherry-mark`), and tab
+completion admits it knows these three only once something is staged.
+
+Notes for later:
+
+- `initCherry` decorates the commit line from JS rather than from the markup,
+  so the affordance can never exist without the code behind it, and the hint
+  span is **appended**: `consoleTargets()` reads the hash and the branch out of
+  that line's first two spans.
+- The slab's wrapper div also *starts* with the text `commit ...`, so the
+  decorator takes the last matching `div`, not the first. Same trap applies to
+  anything else that goes looking for that line.
+- A staged node's size bump belongs in the easing **target**. `node.scale` is
+  what the ease reads back every frame, so multiplying the applied scale
+  compounds it: a staged node reached six figures in about a second.
+- Every print rule is scoped to `body.cj-patch-open`. Without that, an ordinary
+  ⌘P with the sheet closed would hide the page and print an empty sheet.
+- The sheet never re-wraps. Lines are wrapped to 74 columns when the patch is
+  built, so `white-space:pre` keeps the diffstat columns lined up and a narrow
+  screen scrolls sideways instead of folding them.
+- Repos owned by the profile have no upstream PR count, so their diffstat row
+  reads `new +++` rather than a number, which is the shape git uses for a row
+  it has no line counts for.
+- Unlike detached HEAD it needs nothing from the 3D: picking, the sheet, the
+  copy and the print all work if WebGL or the CDN never arrives. Only the amber
+  node is skipped.
+
 ## The commit rail
 
 A minimap of the graph pinned to the right edge. Each dot sits at the scroll
