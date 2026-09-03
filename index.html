@@ -21,7 +21,7 @@
 <style>
   :root{
     --cj-bg:#0A0A0B; --cj-bg2:#0D1117; --cj-accent:#39D353; --cj-cyan:#58A6FF;
-    --cj-slate:#30363D; --cj-text:#E6EDF3; --cj-dim:#7D8590;
+    --cj-slate:#30363D; --cj-text:#E6EDF3; --cj-dim:#7D8590; --cj-orange:#F0883E;
   }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; }
@@ -89,8 +89,73 @@
   .cj-hud-keys{ margin-top:5px; font-size:10.5px; letter-spacing:.05em; color:var(--cj-dim); }
   .cj-hud-keys button{ font:inherit; color:var(--cj-accent); background:none; border:0; padding:0; cursor:pointer; border-bottom:1px dotted rgba(57,211,83,.45); }
   .cj-hud-keys button:hover{ color:var(--cj-text); }
-  @media (prefers-reduced-motion: reduce){ #cj-root, #cj-rail, #cj-detach-hud, [data-cj-detach]{ transition:none; } }
-  @media (prefers-reduced-motion: reduce){ .cj-rail-dot, .cj-rail-label{ transition:none; } }
+  /* ---- cherry-pick staging (hidden: each slab's commit line is the trigger)
+     The line already says "commit 9c4e1a"; clicking it picks that commit onto
+     a scratch branch, and a staged commit can be written out as a real patch.
+     Styled only on hover, so it reads as body copy until a cursor lands. ---- */
+  [data-cj-pick]{ pointer-events:auto; cursor:pointer; border-left:2px solid transparent; padding-left:10px; margin-left:-12px; transition:color .2s ease, border-color .25s ease; }
+  [data-cj-pick]:hover{ border-left-color:#30363d; }
+  [data-cj-pick]:focus{ outline:none; }
+  [data-cj-pick]:focus-visible{ border-left-color:var(--cj-cyan); text-shadow:0 0 14px rgba(88,166,255,.35); }
+  [data-cj-pick].is-picked{ border-left-color:var(--cj-orange); }
+  .cj-pick-hint{ margin-left:10px; color:#414855; opacity:0; letter-spacing:.04em; transition:opacity .2s ease, color .2s ease; }
+  [data-cj-pick]:hover .cj-pick-hint, [data-cj-pick]:focus-visible .cj-pick-hint{ opacity:1; }
+  [data-cj-pick].is-picked .cj-pick-hint{ opacity:1; color:var(--cj-orange); }
+  /* the staging area: the only label the feature ever gets, and it only
+     appears once a visitor has already found the trigger */
+  #cj-staged{ position:fixed; z-index:68; left:26px; bottom:26px; display:flex; align-items:center; gap:11px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.05em; color:var(--cj-dim); background:rgba(13,17,23,.93); border:1px solid #2b2320; border-radius:9px; padding:9px 13px; box-shadow:0 16px 46px rgba(0,0,0,.55); backdrop-filter:blur(9px); opacity:0; transform:translateY(9px); pointer-events:none; transition:opacity .3s ease, transform .3s cubic-bezier(.2,.9,.3,1); }
+  body.cj-staged #cj-staged{ opacity:1; transform:none; pointer-events:auto; }
+  body.cj-detached #cj-staged{ opacity:0 !important; pointer-events:none !important; }
+  #cj-staged b{ font-weight:400; color:var(--cj-orange); }
+  #cj-staged .cj-staged-dot{ width:7px; height:7px; border-radius:50%; background:var(--cj-orange); box-shadow:0 0 9px rgba(240,136,62,.7); flex:none; }
+  #cj-staged button{ font:inherit; letter-spacing:.05em; cursor:pointer; border-radius:6px; padding:5px 10px; transition:color .18s ease, border-color .18s ease, background .18s ease; }
+  #cj-staged-go{ color:var(--cj-accent); background:rgba(57,211,83,.08); border:1px solid #1d3f26; }
+  #cj-staged-go:hover{ color:#04130a; background:var(--cj-accent); border-color:var(--cj-accent); }
+  #cj-staged-clear{ color:#5c646f; background:none; border:1px solid transparent; }
+  #cj-staged-clear:hover{ color:var(--cj-text); border-color:var(--cj-slate); }
+  @media (max-width:520px){ #cj-staged{ left:14px; right:14px; bottom:14px; justify-content:center; } }
+  /* ---- format-patch sheet ---------------------------------------------- */
+  #cj-patch{ position:fixed; inset:0; z-index:82; display:none; }
+  #cj-patch.is-open{ display:block; }
+  #cj-patch-scrim{ position:absolute; inset:0; background:rgba(3,4,7,.78); backdrop-filter:blur(4px); }
+  .cj-patch-shell{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(860px,94vw); max-height:88vh; display:flex; flex-direction:column; background:#0d1117; border:1px solid var(--cj-slate); border-radius:11px; box-shadow:0 34px 100px rgba(0,0,0,.7); overflow:hidden; font-family:'JetBrains Mono',monospace; }
+  .cj-patch-shell:focus{ outline:none; }
+  .cj-patch-bar{ display:flex; align-items:center; gap:10px; padding:10px 13px; border-bottom:1px solid #1b2029; font-size:10.5px; letter-spacing:.09em; color:var(--cj-dim); flex:none; }
+  .cj-patch-bar .cj-patch-name{ color:var(--cj-text); letter-spacing:.04em; }
+  .cj-patch-acts{ margin-left:auto; display:flex; gap:7px; }
+  .cj-patch-acts button{ font:inherit; font-size:10.5px; letter-spacing:.08em; color:var(--cj-dim); background:none; border:1px solid #1f2530; border-radius:6px; padding:5px 10px; cursor:pointer; transition:color .18s ease, border-color .18s ease; }
+  .cj-patch-acts button:hover{ color:var(--cj-text); border-color:var(--cj-slate); }
+  .cj-patch-acts button.is-done{ color:var(--cj-accent); border-color:#1d3f26; }
+  #cj-patch-body{ margin:0; padding:20px 22px 26px; overflow:auto; overscroll-behavior:contain; font-size:12px; line-height:1.66; color:#c9d1d9; white-space:pre; tab-size:8; }
+  @media (max-width:640px){
+    .cj-patch-bar .cj-patch-name{ display:none; }
+    #cj-patch-body{ font-size:10.5px; padding:15px 16px 20px; }
+  }
+  #cj-patch-body .cj-p-key{ color:#6e7681; }
+  #cj-patch-body .cj-p-sub{ color:var(--cj-text); }
+  #cj-patch-body .cj-p-oid{ color:#4d5560; }
+  #cj-patch-body .cj-p-add{ color:var(--cj-accent); }
+  #cj-patch-body .cj-p-num{ color:var(--cj-orange); }
+  #cj-patch-body .cj-p-path{ color:var(--cj-cyan); }
+  #cj-patch-body a{ color:var(--cj-cyan); }
+  @media (prefers-reduced-motion: reduce){ #cj-root, #cj-rail, #cj-detach-hud, [data-cj-detach], [data-cj-pick], #cj-staged{ transition:none; } }
+  @media (prefers-reduced-motion: reduce){ .cj-rail-dot, .cj-rail-label, .cj-pick-hint{ transition:none; } }
+  /* The sheet is the one thing on this page worth putting on paper, so while
+     it is up, print drops everything else and lets the patch flow across
+     pages. Every rule is scoped to that state: a plain cmd-P on the page
+     itself must still print the page. */
+  @media print{
+    body.cj-patch-open{ background:#fff !important; }
+    body.cj-patch-open #cj-app > *{ display:none !important; }
+    body.cj-patch-open #cj-app > #cj-patch{ display:block !important; position:static !important; }
+    body.cj-patch-open #cj-patch-scrim, body.cj-patch-open .cj-patch-bar{ display:none !important; }
+    body.cj-patch-open .cj-patch-shell{ position:static !important; transform:none !important; width:auto; max-width:none; max-height:none; border:0; border-radius:0; box-shadow:none; background:#fff !important; }
+    body.cj-patch-open #cj-patch-body{ max-height:none !important; overflow:visible !important; padding:0; font-size:10px; line-height:1.55; color:#101418 !important; background:#fff !important; white-space:pre-wrap; }
+    body.cj-patch-open #cj-patch-body .cj-p-key, body.cj-patch-open #cj-patch-body .cj-p-oid{ color:#6b7280 !important; }
+    body.cj-patch-open #cj-patch-body .cj-p-sub, body.cj-patch-open #cj-patch-body .cj-p-num{ color:#101418 !important; }
+    body.cj-patch-open #cj-patch-body .cj-p-add{ color:#0a7c2f !important; }
+    body.cj-patch-open #cj-patch-body .cj-p-path, body.cj-patch-open #cj-patch-body a{ color:#0b4f9e !important; }
+  }
 </style>
 </helmet>
 <div id="cj-app" style="position:relative; width:100%; min-height:100vh;">
@@ -160,6 +225,31 @@
         <span class="cj-acc" style="font-size:13px;">$</span>
         <input id="cj-console-in" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="git log  ·  git checkout kubescape  ·  help">
       </div>
+    </div>
+  </div>
+
+  <!-- ===== CHERRY-PICK STAGING AREA (appears only once a commit is picked) ===== -->
+  <div id="cj-staged" role="status" aria-live="polite">
+    <span class="cj-staged-dot"></span>
+    <span id="cj-staged-count">nothing staged</span>
+    <button type="button" id="cj-staged-go">git format-patch</button>
+    <button type="button" id="cj-staged-clear" title="Unstage everything (git reset)">reset</button>
+  </div>
+
+  <!-- ===== FORMAT-PATCH SHEET (the staged commits, as a real patch you can keep) ===== -->
+  <div id="cj-patch" role="dialog" aria-modal="true" aria-label="format-patch output" aria-hidden="true">
+    <div id="cj-patch-scrim" data-cj-patch-close></div>
+    <div class="cj-patch-shell" tabindex="-1">
+      <div class="cj-patch-bar">
+        <span class="cj-con-dot" style="background:var(--cj-orange);"></span>
+        <span class="cj-patch-name" id="cj-patch-file">0000-cover-letter.patch</span>
+        <div class="cj-patch-acts">
+          <button type="button" data-cj-patch-copy>copy</button>
+          <button type="button" data-cj-patch-print>print / pdf</button>
+          <button type="button" data-cj-patch-close>close esc</button>
+        </div>
+      </div>
+      <pre id="cj-patch-body" data-lenis-prevent></pre>
     </div>
   </div>
 
@@ -419,6 +509,7 @@ class Component extends DCLogic {
     this.initConsole();
     this.initRail();
     this.initDetach();
+    this.initCherry();
 
     // wait for the UMD libs (gsap/ScrollTrigger/Lenis) to finish loading, then boot
     this.waitForLibs().then(() => this.boot()).catch(e => console.warn('[CommitJourney] boot failed', e));
@@ -808,7 +899,11 @@ class Component extends DCLogic {
   // create the project merge nodes at measured scroll positions
   placeProjects(tArr) {
     const projs = this.PORTFOLIO.projects;
-    tArr.forEach((t, i) => { if (projs[i]) this.makeMajor(t, projs[i].side, projs[i].name, true); });
+    // kept in slab order, so commit n's node is projNodes[n - 1] and a
+    // cherry-picked commit can be lit up out in the graph
+    this._projNodes = [];
+    tArr.forEach((t, i) => { if (projs[i]) this._projNodes.push(this.makeMajor(t, projs[i].side, projs[i].name, true)); });
+    this.paintStagedNodes();
   }
 
   /* ======================================================================
@@ -955,12 +1050,15 @@ class Component extends DCLogic {
       // major nodes: soft pulse + hover scale
       for (const node of this.majorNodes) {
         const pulse = 1 + Math.sin(time * 1.6 + node.position.x) * 0.07;
-        const target = (this.hovered === node ? 1.55 : 1) * pulse;
+        // the staged bump belongs in the target, not in the applied scale:
+        // node.scale is what the easing reads back, so multiplying it there
+        // would compound every frame
+        const target = (this.hovered === node ? 1.55 : 1) * (node.userData.staged ? 1.18 : 1) * pulse;
         const cur = node.scale.x + (target - node.scale.x) * 0.15;
         node.scale.setScalar(cur);
         if (node.userData.ring) { node.userData.ring.lookAt(this.camera.position); node.userData.ring.scale.setScalar(cur); }
-        node.userData.mat.emissiveIntensity = (this.hovered === node ? 2.4 : 1.35);
-        if (node.userData.branch) node.userData.branch.bmat.opacity = (this.hovered === node ? 0.95 : 0.4);
+        node.userData.mat.emissiveIntensity = (this.hovered === node ? 2.4 : node.userData.staged ? 2.0 : 1.35);
+        if (node.userData.branch) node.userData.branch.bmat.opacity = (this.hovered === node ? 0.95 : node.userData.staged ? 0.78 : 0.4);
       }
 
       // particle drift
@@ -1051,12 +1149,15 @@ class Component extends DCLogic {
     this._onConsoleHotkey = (e) => {
       const tag = (e.target && e.target.tagName || '').toLowerCase();
       const typing = tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable);
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.toggleConsole(); return; }
+      // escape unwinds the deepest layer first: sheet, then console, then detach
       if (e.key === 'Escape') {
-        if (this._con.open) { e.preventDefault(); this.toggleConsole(false); }
+        if (this._patchOpen) { e.preventDefault(); this.closePatch(); }
+        else if (this._con.open) { e.preventDefault(); this.toggleConsole(false); }
         else if (this.detached) { e.preventDefault(); this.attachHead(); }
         return;
       }
+      if (this._patchOpen) return;   // the patch sheet is modal; nothing else gets keys
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.toggleConsole(); return; }
       if (e.key === '/' && !typing && !this._con.open) { e.preventDefault(); this.toggleConsole(true); return; }
       if (this.detached) return;   // j/k would scroll a page that is locked and invisible
       if ((e.key === 'j' || e.key === 'k') && !typing && !this._con.open && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -1229,8 +1330,13 @@ class Component extends DCLogic {
   }
 
   get CONSOLE_COMMANDS() {
-    return ['help', 'git log', 'git checkout ', 'git show ', 'git status', 'git branch', 'git remote -v',
-            'git diff', 'git blame', 'git push --force', 'git pull', 'whoami', 'clear', 'exit'];
+    const base = ['help', 'git log', 'git checkout ', 'git show ', 'git status', 'git branch', 'git remote -v',
+                  'git diff', 'git blame', 'git push --force', 'git pull', 'whoami', 'clear', 'exit'];
+    // cherry-pick and format-patch stay out of `help` and out of completion
+    // until a visitor has picked something for themselves; after that the
+    // console admits it knows them.
+    if (this.picks && this.picks.length) base.push('git cherry-pick ', 'git format-patch', 'git reset');
+    return base;
   }
 
   /* ---- the commands ------------------------------------------------------ */
@@ -1248,7 +1354,7 @@ class Component extends DCLogic {
     if (cmd === 'help' || cmd === '?' || cmd === 'man') return this.cmdHelp();
     if (cmd === 'whoami') {
       P('<span style="color:var(--cj-text);">Parth Dagia</span> <span class="cj-dim">&lt;@parthdagia05&gt;</span>');
-      P('<span class="cj-dim">Compilers, runtimes and cloud-native infrastructure. GSoC 2026 contributor and Sugar Labs maintainer.</span>');
+      P('<span class="cj-dim">' + this.cesc(this.BIO) + '</span>');
       return;
     }
     if (cmd === 'ls' || cmd === 'dir') return this.cmdLog();
@@ -1281,6 +1387,10 @@ class Component extends DCLogic {
       case 'commit': P('<span class="cj-dim">nothing to commit, working tree clean</span>'); return;
       case 'push': return this.cmdPush(line);
       case 'stash': P('<span class="cj-dim">Saved working directory. Nothing was actually stashed, this is a portfolio.</span>'); return;
+      // the staging area: undocumented in `help`, same as `checkout --detach`
+      case 'cherry-pick': case 'cherry': case 'add': case 'stage': return this.cmdCherryPick(argv.slice(2));
+      case 'reset': case 'restore': case 'unstage': return this.cmdReset();
+      case 'format-patch': case 'format': return this.cmdFormatPatch(argv.slice(2).join(' '));
       case '': P('<span class="cj-dim">usage: git &lt;command&gt;. See </span><span class="cj-acc">help</span><span class="cj-dim">.</span>'); return;
       default:
         P("<span class=\"cj-dim\">git: '" + this.cesc(sub) + "' is not a git command. See </span><span class=\"cj-acc\">help</span><span class=\"cj-dim\">.</span>");
@@ -1309,7 +1419,8 @@ class Component extends DCLogic {
     this.cprint('<span class="cj-acc">*</span> <span class="cj-warn">HEAD</span> <span class="cj-dim">-&gt; parth/main</span>');
     t.slice().reverse().forEach(x => {
       this.cprint('<span class="cj-dim">|</span>');
-      this.cprint('<span class="cj-acc">*</span> <span class="cj-warn cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.hash) + '</span> ' +
+      const mark = this.isPicked(x.hash) ? '<span class="cj-warn">+</span>' : '<span class="cj-acc">*</span>';
+      this.cprint(mark + ' <span class="cj-warn cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.hash) + '</span> ' +
         '<span class="cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.name) + '</span> ' +
         '<span class="cj-cy">(' + this.cesc(x.branch) + ')</span>');
     });
@@ -1374,6 +1485,7 @@ class Component extends DCLogic {
       if (r.top <= window.innerHeight * 0.5 && r.bottom > window.innerHeight * 0.5) here = s.getAttribute('data-screen-label');
     });
     this.cprint('<span class="cj-dim">On section </span><span class="cj-acc">' + this.cesc(here) + '</span><span class="cj-dim">, ' + pct + '% through the history</span>');
+    if (this.picks.length) return this.printStaged();
     this.cprint('<span class="cj-dim">nothing to commit, working tree clean</span>');
   }
 
@@ -1531,6 +1643,422 @@ class Component extends DCLogic {
     r.intent = i;
     r.intentUntil = performance.now() + 1800;   // a touch over the 1.6s scroll
     this.scrollToY(r.stops[i].y);
+  }
+
+  /* ======================================================================
+     CHERRY-PICK  →  FORMAT-PATCH
+     ----------------------------------------------------------------------
+     The second thing on this page that is hidden in plain sight. Every
+     project slab opens with a line of body copy that reads
+
+         commit 9c4e1a · merge branch 'sugarlabs/musicblocks-v4'
+
+     and clicking it cherry-picks that commit onto a scratch branch. Pick a
+     few and `git format-patch` writes them out as a real patch series with a
+     cover letter: the bio, a shortlog, and a diffstat whose insertion counts
+     are the actual merged-PR numbers from the GitHub payload.
+
+     That makes it the one thing here that leaves the page. A visitor who
+     only cares about the Go work picks two commits, hits print, and walks
+     away with a one-page tailored to them - which is more use than any
+     download button, and it costs no backend, because every word of it is
+     read back out of the markup that is already on screen.
+
+     Like `checkout --detach`, the commands are absent from `help`; unlike it,
+     tab completion learns them once the visitor has staged something, and the
+     staging pill is the one label the feature ever gets.
+     ====================================================================== */
+
+  get picks() { return this._picks || (this._picks = []); }
+  isPicked(hash) { return !!hash && this.picks.indexOf(hash) >= 0; }
+
+  /* the one-line bio, shared by `whoami` and the cover letter */
+  get BIO() {
+    return 'Compilers, runtimes and cloud-native infrastructure. GSoC 2026 contributor and Sugar Labs maintainer.';
+  }
+
+  initCherry() {
+    if (this._cherry) return;
+    this._cherry = true;
+    // Decorated here rather than in the markup so that editing a slab cannot
+    // break it, and so the affordance never exists without the code behind it.
+    this.consoleTargets().filter(x => x.kind === 'commit').forEach(t => {
+      // the slab's wrapper div also *starts* with "commit ...", so take the
+      // last match in document order: that is the leaf line itself
+      const cands = Array.from(t.el.querySelectorAll('div')).filter(d => /^commit\s/i.test(d.textContent.trim()));
+      const line = cands[cands.length - 1];
+      if (!line || !t.hash) return;
+      line.setAttribute('data-cj-pick', t.hash);
+      line.setAttribute('role', 'button');
+      line.setAttribute('tabindex', '0');
+      line.setAttribute('aria-label', 'Cherry-pick commit ' + t.hash + ', ' + t.name);
+      // appended, never inserted: consoleTargets() reads the hash and branch
+      // out of this line's first two spans
+      const hint = document.createElement('span');
+      hint.className = 'cj-pick-hint';
+      hint.setAttribute('aria-hidden', 'true');
+      line.appendChild(hint);
+      line.addEventListener('click', () => this.togglePick(t.hash));
+      line.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.togglePick(t.hash); }
+      });
+    });
+
+    const go = document.getElementById('cj-staged-go');
+    const clear = document.getElementById('cj-staged-clear');
+    if (go) go.addEventListener('click', () => this.openPatch());
+    if (clear) clear.addEventListener('click', () => { this._picks = []; this.renderPicks(); });
+
+    const patch = document.getElementById('cj-patch');
+    if (patch) {
+      patch.querySelectorAll('[data-cj-patch-close]').forEach(b => b.addEventListener('click', () => this.closePatch()));
+      const copy = patch.querySelector('[data-cj-patch-copy]');
+      const print = patch.querySelector('[data-cj-patch-print]');
+      if (copy) copy.addEventListener('click', () => this.copyPatch(copy));
+      if (print) print.addEventListener('click', () => window.print());
+    }
+    this.renderPicks();
+  }
+
+  togglePick(hash) {
+    const i = this.picks.indexOf(hash);
+    if (i >= 0) this.picks.splice(i, 1);
+    else this.picks.push(hash);          // pick order is patch order
+    this.renderPicks();
+    if (i < 0) this.flare(0.28);
+  }
+
+  renderPicks() {
+    const n = this.picks.length;
+    document.querySelectorAll('[data-cj-pick]').forEach(line => {
+      const on = this.isPicked(line.getAttribute('data-cj-pick'));
+      line.classList.toggle('is-picked', on);
+      line.setAttribute('aria-pressed', on ? 'true' : 'false');
+      const hint = line.querySelector('.cj-pick-hint');
+      if (hint) hint.textContent = on ? 'staged' : 'cherry-pick';
+    });
+    document.body.classList.toggle('cj-staged', n > 0);
+    const count = document.getElementById('cj-staged-count');
+    if (count) count.innerHTML = '<b>' + n + '</b> commit' + (n === 1 ? '' : 's') + ' staged on <b>parth/selected</b>';
+    this.paintStagedNodes();
+  }
+
+  /* a staged commit is lit amber out in the graph, so the selection is
+     visible from the fly-through and from detached HEAD alike */
+  paintStagedNodes() {
+    if (!this._projNodes || !this.THREE) return;
+    const t = this.consoleTargets().filter(x => x.kind === 'commit');
+    this._projNodes.forEach((node, i) => {
+      const on = !!(t[i] && this.isPicked(t[i].hash));
+      if (!!node.userData.staged === on) return;
+      node.userData.staged = on;
+      const ring = node.userData.ring;
+      if (ring) {
+        ring.material.color.set(on ? 0xF0883E : this._accentCol);
+        ring.material.opacity = on ? 0.6 : 0.25;
+      }
+    });
+  }
+
+  /* ---- the console side ------------------------------------------------- */
+  printStaged() {
+    this.cprint('<span class="cj-dim">Changes to be committed:</span>');
+    this.cprint('<span class="cj-dim">  (use </span><span class="cj-acc">git reset</span><span class="cj-dim"> to unstage, </span>' +
+                '<span class="cj-acc">git format-patch</span><span class="cj-dim"> to write the patch)</span>');
+    const t = this.patchCommits();
+    t.forEach(x => this.cprint('<span class="cj-warn">&nbsp;&nbsp;&nbsp;&nbsp;cherry-picked:</span>&nbsp;&nbsp;' +
+      '<span class="cj-jump" data-ref="' + this.cesc(x.hash) + '">' + this.cesc(x.hash) + '</span> ' +
+      '<span class="cj-dim">' + this.cesc(x.name) + '</span>'));
+  }
+
+  cmdCherryPick(args) {
+    const all = args.some(a => /^--?all$/i.test(a));
+    const commits = this.consoleTargets().filter(x => x.kind === 'commit');
+    if (!all && !args.length) {
+      this.cprint('<span class="cj-dim">usage: git cherry-pick &lt;ref&gt;... | --all</span>');
+      this.cprint('<span class="cj-dim">Or click the </span><span class="cj-warn">commit &lt;hash&gt;</span><span class="cj-dim"> line on any project.</span>');
+      return;
+    }
+    const refs = all ? commits.map(x => x.hash) : args.filter(a => !/^-/.test(a));
+    let picked = 0;
+    refs.forEach(ref => {
+      const t = this.resolveRef(ref);
+      if (!t) {
+        this.cprint("<span class=\"cj-warn\">error: bad revision '" + this.cesc(ref) + "'</span>");
+        return;
+      }
+      if (t.kind !== 'commit') {
+        this.cprint('<span class="cj-warn">error: ' + this.cesc(t.name) + ' is not a merge point.</span>' +
+                    '<span class="cj-dim"> Run </span><span class="cj-acc">git log</span><span class="cj-dim"> for the six.</span>');
+        return;
+      }
+      if (this.isPicked(t.hash)) {
+        this.cprint('<span class="cj-dim">' + this.cesc(t.hash) + ' is already staged.</span>');
+        return;
+      }
+      this.picks.push(t.hash);
+      picked++;
+      this.cprint('<span class="cj-dim">[parth/selected </span><span class="cj-warn">' + this.cesc(t.hash) + '</span>' +
+                  '<span class="cj-dim">] ' + this.cesc(t.name) + '</span>');
+    });
+    this.renderPicks();
+    if (!picked) return;
+    this.flare(0.3);
+    this.cprint('<span class="cj-dim">' + this.picks.length + ' commit' + (this.picks.length === 1 ? '' : 's') +
+                ' staged. Write them out with </span><span class="cj-acc">git format-patch</span><span class="cj-dim">.</span>');
+  }
+
+  cmdReset() {
+    if (!this.picks.length) { this.cprint('<span class="cj-dim">nothing staged; the working tree was already clean</span>'); return; }
+    const n = this.picks.length;
+    this._picks = [];
+    this.renderPicks();
+    this.cprint('<span class="cj-dim">Unstaged ' + n + ' commit' + (n === 1 ? '' : 's') + '. HEAD is now at </span><span class="cj-acc">parth/main</span>');
+  }
+
+  cmdFormatPatch(rest) {
+    if (/--stdout/.test(String(rest || ''))) {
+      // asked for it on stdout, so it goes to the scrollback instead
+      this.buildPatch().text.split('\n').forEach(l => this.cprint('<span class="cj-dim">' + this.cesc(l || ' ') + '</span>'));
+      return;
+    }
+    if (!this.picks.length) {
+      this.cprint('<span class="cj-dim">no commits staged, formatting all of </span><span class="cj-acc">parth/main</span>');
+    }
+    const built = this.openPatch();
+    if (built) this.cprint('<span class="cj-dim">wrote </span><span class="cj-cy">' + this.cesc(built.file) + '</span>' +
+                           '<span class="cj-dim"> · copy or print it, esc to close</span>');
+  }
+
+  /* ---- the patch itself -------------------------------------------------
+     Nothing here is a second copy of the content: the commits, their stacks,
+     their upstream links and the merged-PR numbers in the diffstat are all
+     read back out of the slabs, so a patch is always current with the page. */
+  patchCommits() {
+    const all = this.consoleTargets().filter(x => x.kind === 'commit');
+    if (!this.picks.length) return all;
+    return this.picks.map(h => all.find(x => x.hash === h)).filter(Boolean);
+  }
+
+  // the merged-PR count on a slab, whatever data/github.json last wrote there
+  slabPRs(art) {
+    const span = Array.from(art.querySelectorAll('span')).find(s => /PRs?\s+merged/i.test(s.textContent));
+    if (!span) return null;
+    const m = span.textContent.replace(/,/g, '').match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : null;
+  }
+
+  contactLines() {
+    const sec = document.querySelector('[data-screen-label="Contact"]');
+    const out = [];
+    if (sec) {
+      sec.querySelectorAll('a[href]').forEach(a => {
+        const h = a.getAttribute('href') || '';
+        const v = /^mailto:/.test(h) ? h.replace(/^mailto:/, '') : h;
+        if (/^(https?:|[^@\s]+@)/.test(v) && out.indexOf(v) < 0) out.push(v);
+      });
+    }
+    return out;
+  }
+
+  gitDate() {
+    // "Wed, 03 Sep 2026 11:20:00 +0000", the shape git writes
+    return new Date().toUTCString().replace(/GMT$/, '+0000');
+  }
+
+  // a stable 40-hex object id that still abbreviates to the hash on the slab
+  oid(seed) {
+    let h = 0x811c9dc5;
+    let out = String(seed).toLowerCase().replace(/[^0-9a-f]/g, '');
+    const s = String(seed) + '/parth';
+    while (out.length < 40) {
+      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i) + out.length; h = (h * 0x01000193) >>> 0; }
+      out += h.toString(16).padStart(8, '0');
+    }
+    return out.slice(0, 40);
+  }
+
+  wrap(text, cols) {
+    const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ');
+    const lines = [];
+    let line = '';
+    words.forEach(w => {
+      if (!line) { line = w; return; }
+      if ((line + ' ' + w).length > cols) { lines.push(line); line = w; }
+      else line += ' ' + w;
+    });
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  }
+
+  buildPatch() {
+    const COLS = 74;
+    const commits = this.patchCommits();
+    const total = commits.length;
+    const who = 'Parth Dagia';
+    const mail = (this.contactLines().find(v => v.indexOf('@') > 0) || 'work.parthdagia@gmail.com');
+    const from = who + ' <' + mail + '>';
+    const date = this.gitDate();
+    const sig = ['-- ', '2.51.0', ''];
+
+    // one diffstat row per commit, insertions = real merged-PR count
+    const rows = commits.map(c => {
+      const repo = String(c.url || '').replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\/$/, '') || c.branch;
+      const prs = this.slabPRs(c.el);
+      return { repo, prs, name: c.name };
+    });
+    const bar = (n) => '+'.repeat(Math.max(1, Math.min(34, Math.round(n / 3))));
+    const statRow = (r, pad) => ' ' + r.repo + ' '.repeat(Math.max(0, pad - r.repo.length)) + ' | ' +
+      (r.prs != null ? r.prs + ' ' + bar(r.prs) : 'new +++');
+    const widest = (rs) => rs.reduce((m, r) => Math.max(m, r.repo.length), 0);
+    const totals = (rs) => {
+      const prs = rs.reduce((a, r) => a + (r.prs || 0), 0);
+      let line = ' ' + rs.length + ' repositor' + (rs.length === 1 ? 'y' : 'ies') + ' changed';
+      if (prs) line += ', ' + prs + ' pull request' + (prs === 1 ? '' : 's') + ' merged';
+      return line;
+    };
+
+    const L = [];
+
+    // --- cover letter: exactly what `--cover-letter` writes, which happens
+    // to be the shape of a one-page summary (shortlog + diffstat)
+    L.push('From ' + this.oid('cover/parth/selected') + ' Mon Sep 17 00:00:00 2001');
+    L.push('From: ' + from);
+    L.push('Date: ' + date);
+    L.push('Subject: [PATCH 0/' + total + '] ' + who + ' · ' + total + ' commit' + (total === 1 ? '' : 's') +
+           (this.picks.length ? ' cherry-picked from parth/main' : ' on parth/main'));
+    L.push('');
+    this.wrap(this.BIO, COLS).forEach(l => L.push(l));
+    L.push('');
+    this.contactLines().forEach(v => L.push('  ' + v));
+    L.push('');
+    L.push(who + ' (' + total + '):');
+    commits.forEach(c => L.push('  ' + c.name));
+    L.push('');
+    const pad = widest(rows);
+    rows.forEach(r => L.push(statRow(r, pad)));
+    L.push(totals(rows));
+    L.push('');
+    sig.forEach(l => L.push(l));
+
+    // --- one patch per commit
+    commits.forEach((c, i) => {
+      const r = rows[i];
+      L.push('From ' + this.oid(c.hash + c.name) + ' Mon Sep 17 00:00:00 2001');
+      L.push('From: ' + from);
+      L.push('Date: ' + date);
+      L.push('Subject: [PATCH ' + (i + 1) + '/' + total + '] ' + c.name);
+      L.push('');
+      this.wrap(c.desc, COLS).forEach(l => L.push(l));
+      L.push('');
+      if (c.stack && c.stack.length) L.push('Stack: ' + c.stack.join(' · '));
+      if (c.branch) L.push('Branch: ' + c.branch);
+      if (c.url) L.push('Upstream: ' + c.url);
+      L.push('---');
+      L.push(statRow(r, r.repo.length));
+      L.push(totals([r]));
+      L.push('');
+      sig.forEach(l => L.push(l));
+    });
+
+    const file = '0000-cover-letter.patch … ' + String(total).padStart(4, '0') + '-' +
+      String(commits[total - 1] ? commits[total - 1].name : 'patch').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 34) + '.patch';
+
+    return { text: L.join('\n'), html: this.patchHTML(L), file, total };
+  }
+
+  /* colour the finished patch the way a pager would, by shape of line */
+  patchHTML(lines) {
+    const esc = (x) => this.cesc(x);
+    return lines.map(raw => {
+      const line = esc(raw);
+      let m;
+      if (/^From [0-9a-f]{40} /.test(raw)) return '<span class="cj-p-oid">' + line + '</span>';
+      if ((m = raw.match(/^(From|Date): (.*)$/))) return '<span class="cj-p-key">' + m[1] + ':</span> ' + esc(m[2]);
+      if ((m = raw.match(/^Subject: (\[PATCH [^\]]*\]) (.*)$/))) {
+        return '<span class="cj-p-key">Subject:</span> <span class="cj-p-num">' + esc(m[1]) + '</span> <span class="cj-p-sub">' + esc(m[2]) + '</span>';
+      }
+      if ((m = raw.match(/^(Stack|Branch|Upstream): (.*)$/))) {
+        const v = /^https?:\/\//.test(m[2])
+          ? '<a href="' + esc(m[2]) + '" target="_blank" rel="noopener">' + esc(m[2]) + '</a>'
+          : esc(m[2]);
+        return '<span class="cj-p-key">' + m[1] + ':</span> ' + v;
+      }
+      // diffstat row:  owner/repo | 91 ++++++
+      if ((m = raw.match(/^ (\S+)(\s*)\| (\S+) (\++)$/))) {
+        return ' <span class="cj-p-path">' + esc(m[1]) + '</span>' + m[2] + '| <span class="cj-p-num">' + esc(m[3]) +
+               '</span> <span class="cj-p-add">' + m[4] + '</span>';
+      }
+      if (/^ \d+ repositor/.test(raw) || raw === '---' || raw === '-- ' || /^2\.\d+\.\d+$/.test(raw)) {
+        return '<span class="cj-p-key">' + line + '</span>';
+      }
+      if (/^  \S/.test(raw)) {
+        const v = /^\s*(https?:\/\/\S+)$/.test(raw)
+          ? '  <a href="' + esc(raw.trim()) + '" target="_blank" rel="noopener">' + esc(raw.trim()) + '</a>'
+          : '<span class="cj-p-sub">' + line + '</span>';
+        return v;
+      }
+      return line;
+    }).join('\n');
+  }
+
+  /* ---- the sheet -------------------------------------------------------- */
+  openPatch() {
+    const root = document.getElementById('cj-patch');
+    const body = document.getElementById('cj-patch-body');
+    if (!root || !body) return null;
+    const built = this.buildPatch();
+    this._patchText = built.text;
+    body.innerHTML = built.html;
+    body.scrollTop = 0;
+    const name = document.getElementById('cj-patch-file');
+    if (name) name.textContent = built.file;
+
+    if (this.detached) this.attachHead();     // the sheet lives on the 2D page
+    this.toggleConsole(false);
+    root.classList.add('is-open');
+    root.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('cj-patch-open');   // scopes the print stylesheet
+    this._patchOpen = true;
+    if (this.lenis) this.lenis.stop();        // the sheet scrolls, the page does not
+    const shell = root.querySelector('.cj-patch-shell');
+    if (shell) shell.focus();
+    return built;
+  }
+
+  closePatch() {
+    const root = document.getElementById('cj-patch');
+    if (!root) return;
+    root.classList.remove('is-open');
+    root.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('cj-patch-open');
+    this._patchOpen = false;
+    if (this.lenis && !this.detached) this.lenis.start();
+    const go = document.getElementById('cj-staged-go');
+    if (go && this.picks.length) go.focus();
+  }
+
+  copyPatch(btn) {
+    const text = this._patchText || '';
+    const done = (ok) => {
+      if (!btn) return;
+      btn.textContent = ok ? 'copied' : 'now ⌘C / ^C';
+      btn.classList.toggle('is-done', ok);
+      setTimeout(() => { if (!this.disposed) { btn.textContent = 'copy'; btn.classList.remove('is-done'); } }, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => done(true)).catch(() => done(false));
+      return;
+    }
+    // no clipboard API (or an insecure origin): select it so ⌘C still works
+    try {
+      const body = document.getElementById('cj-patch-body');
+      const r = document.createRange();
+      r.selectNodeContents(body);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      done(false);
+    } catch (e) { done(false); }
   }
 
   /* ======================================================================
