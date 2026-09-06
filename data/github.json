@@ -1,19 +1,12 @@
 {
-  "generated": "2026-09-05T09:06:49.142Z",
+  "generated": "2026-09-06T09:27:43.068Z",
   "login": "parthdagia05",
   "calendar": {
-    "start": "2025-08-31",
-    "end": "2026-09-05",
-    "total": 951,
+    "start": "2025-09-07",
+    "end": "2026-09-06",
+    "total": 967,
     "max": 68,
     "counts": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
-      0,
       0,
       0,
       0,
@@ -377,11 +370,12 @@
       27,
       3,
       1,
-      0
+      3,
+      13
     ]
   },
   "prs": {
-    "merged": 185,
+    "merged": 187,
     "upstreamMerged": 161,
     "upstreamRepos": 11,
     "upstreamOrgs": 9,
@@ -402,8 +396,8 @@
       "sugarlabs/musicblocks-v4": 28,
       "parthdagia05/schemago": 13,
       "sugarlabs/www-v2": 10,
+      "parthdagia05/mandate": 9,
       "WasmEdge/WasmEdge": 9,
-      "parthdagia05/mandate": 7,
       "besu-eth/besu": 6,
       "eth-protocol-fellows/cohort-seven": 4,
       "raghav095/ATA-Assistant": 2,
