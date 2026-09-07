@@ -1225,6 +1225,13 @@ class Component extends DCLogic {
   resolveRef(ref) {
     const raw = String(ref || '').toLowerCase().replace(/^['"]|['"]$/g, '').trim();
     if (!raw) return null;
+    // HEAD@{n} / @{n} / - resolve through the reflog, so `show` and
+    // `cherry-pick` reach a remembered position as well as `checkout` does
+    if (this.isReflogRef(raw)) {
+      const back = this.reflogRef(raw);
+      if (!back) return null;
+      return /^--?detach$/i.test(back) ? { kind: 'head', name: 'parth/main' } : this.resolveRef(back);
+    }
     if (raw === 'head' || raw === 'main' || raw === 'parth/main') return { kind: 'head', name: 'parth/main' };
     const t = this.consoleTargets();
     if (/^\d+$/.test(raw)) return t.find(x => x.kind === 'commit' && x.n === parseInt(raw, 10)) || null;
@@ -1336,6 +1343,8 @@ class Component extends DCLogic {
     // until a visitor has picked something for themselves; after that the
     // console admits it knows them.
     if (this.picks && this.picks.length) base.push('git cherry-pick ', 'git format-patch', 'git reset');
+    // and `reflog` only once HEAD has actually been somewhere
+    if (this.reflog.length) base.push('git reflog', 'git checkout -');
     return base;
   }
 
@@ -1387,6 +1396,8 @@ class Component extends DCLogic {
       case 'commit': P('<span class="cj-dim">nothing to commit, working tree clean</span>'); return;
       case 'push': return this.cmdPush(line);
       case 'stash': P('<span class="cj-dim">Saved working directory. Nothing was actually stashed, this is a portfolio.</span>'); return;
+      // the visitor's own path through the history, also undocumented
+      case 'reflog': return this.cmdReflog(argv.slice(2).join(' '));
       // the staging area: undocumented in `help`, same as `checkout --detach`
       case 'cherry-pick': case 'cherry': case 'add': case 'stage': return this.cmdCherryPick(argv.slice(2));
       case 'reset': case 'restore': case 'unstage': return this.cmdReset();
@@ -1439,6 +1450,16 @@ class Component extends DCLogic {
       this.detachHead();
       return;
     }
+    // walk the reflog back. Re-dispatch on the stored ref rather than on a
+    // resolved target, so an entry that remembers `--detach` detaches again.
+    if (this.isReflogRef(ref)) {
+      const back = this.reflogRef(ref);
+      if (!back) {
+        this.cprint('<span class="cj-warn">fatal: log for \'HEAD\' only has ' + this.reflog.length + ' entries.</span>');
+        return;
+      }
+      return this.cmdCheckout(back);
+    }
     if (!ref) { this.cprint('<span class="cj-dim">usage: git checkout &lt;branch|hash|name|1-6|head&gt;</span>'); return; }
     const t = this.resolveRef(ref);
     if (!t) {
@@ -1454,6 +1475,7 @@ class Component extends DCLogic {
       this.attachHead(t);
       return;
     }
+    this.logTarget(t);
     this.setBranchLabel(label);
     this.jumpTo(t);
     this.flare(t.kind === 'head' ? 0.9 : 0.5);
@@ -1642,7 +1664,113 @@ class Component extends DCLogic {
     const r = this._rail;
     r.intent = i;
     r.intentUntil = performance.now() + 1800;   // a touch over the 1.6s scroll
-    this.scrollToY(r.stops[i].y);
+    // a rail click and j/k are both deliberate, so both are checkouts; the
+    // passive scroll that repaints the rail on the way past is not
+    const s = r.stops[i];
+    this.logRef({ to: s.branch || s.label, ref: s.ref });
+    this.scrollToY(s.y);
+  }
+
+  /* ======================================================================
+     REFLOG  ·  where this visitor has been
+     ----------------------------------------------------------------------
+     A real reflog is local. It is the record of where HEAD has been in your
+     clone and in nobody else's, which is exactly what a visitor's path
+     through this page is, so the console keeps one: `git reflog` prints it
+     and `git checkout HEAD@{n}` walks it back. Undocumented in `help` for
+     the same reason `checkout --detach` and `cherry-pick` are.
+
+     Only deliberate moves land here. Scrolling past a slab repaints the
+     branch readout without writing an entry, because scrolling is not a
+     checkout, but it does move you, so `from` is read off the rail rather
+     than off the last entry. Otherwise scrolling to a project and then
+     checking out another would claim you left from wherever you last typed.
+     ====================================================================== */
+  get reflog() { return this._reflog || (this._reflog = []); }
+  get head() { return this._head || (this._head = { label: 'parth/main', ref: 'head' }); }
+
+  /* The tip and the two rail edges carry no hash in the markup, and neither
+     do the sections. Derive a stable one so the reflog's first column stays
+     a column; the page already runs on invented six-hex hashes. */
+  refHash(label) {
+    let h = 0x811c9dc5;
+    const str = String(label || '');
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = (h * 0x01000193) >>> 0; }
+    return h.toString(16).padStart(8, '0').slice(0, 6);
+  }
+
+  /* Where HEAD is now, which is the rail's business while attached and ours
+     while detached (out there the label is the tip hash git would show). */
+  headLabel() {
+    const r = this._rail;
+    if (!this.detached && r && r.active >= 0 && r.stops[r.active]) {
+      const s = r.stops[r.active];
+      return s.branch || s.label;
+    }
+    return this.head.label;
+  }
+
+  /* Record a move. `ref` is whatever `checkout` took to get there, so the
+     entry can be replayed later by handing it straight back to cmdCheckout,
+     which is how a remembered `--detach` manages to detach again. */
+  logRef(entry) {
+    if (!entry || !entry.to) return;
+    const from = this.headLabel();
+    if (entry.to === from) return;      // git declines to log "Already on ..."
+    this._head = { label: entry.to, ref: entry.ref };
+    this.reflog.unshift({
+      ref: entry.ref, from: from, to: entry.to,
+      hash: entry.hash || this.refHash(entry.to),
+      action: entry.action || 'checkout'
+    });
+    if (this.reflog.length > 40) this.reflog.length = 40;   // git expires, we cap
+  }
+
+  /* the same, for a target out of resolveRef / consoleTargets */
+  logTarget(t) {
+    if (!t) return;
+    if (t.kind === 'head') return this.logRef({ to: 'parth/main', ref: 'head' });
+    this.logRef({ to: t.branch || t.name, ref: t.hash || t.branch || t.name, hash: t.hash });
+  }
+
+  /* `HEAD@{2}`, `@{2}` and `-`, the three spellings git takes for this.
+     Returns the stored ref, or undefined when the spelling is right but the
+     log is too short, which the caller reports the way git does. */
+  reflogRef(raw) {
+    const q = String(raw || '').toLowerCase().replace(/^['"]|['"]$/g, '').trim();
+    let n = -1;
+    if (q === '-') n = 1;                       // previous position
+    else { const m = q.match(/^(?:head)?@\{(\d+)\}$/); if (m) n = parseInt(m[1], 10); }
+    if (n < 0) return null;                     // not a reflog spelling at all
+    const e = this.reflog[n];
+    return e ? e.ref : undefined;
+  }
+
+  isReflogRef(raw) {
+    return /^-$|^(?:head)?@\{\d+\}$/i.test(String(raw || '').replace(/^['"]|['"]$/g, '').trim());
+  }
+
+  cmdReflog(args) {
+    const log = this.reflog;
+    if (!log.length) {
+      this.cprint('<span class="cj-dim">HEAD has not moved yet. Check something out and come back.</span>');
+      return;
+    }
+    let n = 12;
+    const m = String(args || '').match(/-n\s*(\d+)|^-(\d+)$/);
+    if (m) n = Math.max(1, parseInt(m[1] || m[2], 10));
+    log.slice(0, n).forEach((e, i) => {
+      const at = 'HEAD@{' + i + '}';
+      this.cprint(
+        '<span class="cj-warn cj-jump" data-ref="' + at + '">' + this.cesc(e.hash) + '</span> ' +
+        '<span class="cj-cy cj-jump" data-ref="' + at + '">' + at + '</span>' +
+        '<span class="cj-dim">: ' + this.cesc(e.action) + ': moving from ' + this.cesc(e.from) + ' to </span>' +
+        '<span style="color:var(--cj-text);">' + this.cesc(e.to) + '</span>');
+    });
+    if (log.length > n) {
+      this.cprint('<span class="cj-dim">... ' + (log.length - n) + ' more. </span>' +
+                  '<span class="cj-acc">git reflog -n ' + log.length + '</span><span class="cj-dim"> for all of it.</span>');
+    }
   }
 
   /* ======================================================================
@@ -2120,6 +2248,10 @@ class Component extends DCLogic {
       moved: 0
     };
 
+    // git logs a detach as a move onto the sha it left you sitting on, and
+    // stores `--detach` as the ref so HEAD@{n} can put you back out here
+    const tip = this.refHash('parth/main');
+    this.logRef({ to: tip, ref: '--detach', hash: tip });
     document.body.classList.add('cj-detached');
     this.setBranchLabel('HEAD detached');
     if (this.lenis) this.lenis.stop();
@@ -2136,6 +2268,9 @@ class Component extends DCLogic {
 
   attachHead(target) {
     if (!this.detached) return;
+    // log while still detached, so the entry leaves from the tip hash the way
+    // git reports it, not from whichever branch the rail was last showing
+    if (target) this.logTarget(target); else this.logRef({ to: 'parth/main', ref: 'head' });
     this.detached = false;
     document.body.classList.remove('cj-detached');
     this.unbindOrbit();
