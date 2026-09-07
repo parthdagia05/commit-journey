@@ -122,6 +122,60 @@ Notes for later:
   copy and the print all work if WebGL or the CDN never arrives. Only the amber
   node is skipped.
 
+## Reflog (also undocumented on the page)
+
+A reflog is the one part of git that is purely yours: it records where HEAD has
+been in your clone and in nobody else's, and it exists so you can get back to
+somewhere you have already been. A visitor's path down this page is exactly
+that, so the console keeps one.
+
+| Command | What it does |
+|---|---|
+| `git reflog` | the moves this visitor has made, newest first; `-n <k>` or `-<k>` for a different depth than the default 12 |
+| `git checkout HEAD@{n}` | go back to where HEAD was n moves ago; `@{n}` works too |
+| `git checkout -` | the previous position, which is `HEAD@{1}` |
+
+Every hash and every `HEAD@{n}` in the output is clickable, because the
+scrollback already turns anything carrying a `data-ref` into a checkout.
+
+What counts as a move is the interesting decision. A console `checkout`, a rail
+dot, <kbd>j</kbd>/<kbd>k</kbd>, clicking a node while detached, detaching and
+reattaching are all deliberate, so all of them write an entry. Scrolling does
+not, even though it repaints the `git:(branch)` readout on the way past: a
+reflog full of scroll noise would be useless for the one thing a reflog is for.
+Staging a commit does not either, matching real git, which logs HEAD moves and
+not `git add`.
+
+Notes for later:
+
+- Scrolling is not a checkout but it does move you, so `logRef` reads `from`
+  off the rail's active stop rather than off the last entry. Without that,
+  scrolling to Kubescape and then running `git checkout exlang` would claim you
+  left from wherever you last typed, which is both wrong and confusing.
+- `attachHead` logs **before** it clears `this.detached`, so the entry leaves
+  from the tip hash the way git reports a detached position. Logging after the
+  flag flip reads the rail instead and names the branch you were on before you
+  detached.
+- Entries store the ref that `checkout` took, not a resolved target, and
+  `cmdCheckout` re-dispatches on that string. That is what lets an entry
+  remembering `--detach` detach again instead of resolving to a node, and it
+  keeps the markup the single source of truth: the target is resolved fresh on
+  replay, so editing a slab does not strand the log.
+- The tip, the two rail edges and the sections carry no hash in the markup, so
+  `refHash` derives a stable six-hex one (FNV-1a over the label) and the first
+  column stays a column. The page already runs on invented hashes.
+- A move to where HEAD already is is dropped, the way git declines to log
+  `Already on 'main'`.
+- Real git expires reflog entries; this one just stops at 40.
+- `git reflog` and `git checkout -` stay out of `help` and out of tab
+  completion until HEAD has actually been somewhere, the same bargain
+  `cherry-pick` strikes with `picks.length`.
+- `resolveRef` learns the spellings too, not just `cmdCheckout`, so
+  `git show HEAD@{2}` and `git cherry-pick -` work. It recurses once through
+  the stored ref, which is never itself a reflog spelling.
+- It needs nothing from the 3D. Detach entries are the only ones that require a
+  scene, and only because detaching does.
+
 ## The commit rail
 
 A minimap of the graph pinned to the right edge. Each dot sits at the scroll
