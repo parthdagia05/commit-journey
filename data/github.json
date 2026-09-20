@@ -1,19 +1,12 @@
 {
-  "generated": "2026-09-19T09:32:55.318Z",
+  "generated": "2026-09-20T09:49:45.427Z",
   "login": "parthdagia05",
   "calendar": {
-    "start": "2025-09-14",
-    "end": "2026-09-19",
-    "total": 1031,
+    "start": "2025-09-21",
+    "end": "2026-09-20",
+    "total": 1042,
     "max": 68,
     "counts": [
-      0,
-      0,
-      0,
-      0,
-      0,
-      2,
-      4,
       0,
       0,
       0,
@@ -377,16 +370,17 @@
       4,
       2,
       3,
-      1
+      12,
+      0
     ]
   },
   "prs": {
-    "merged": 194,
-    "upstreamMerged": 167,
+    "merged": 195,
+    "upstreamMerged": 168,
     "upstreamRepos": 11,
     "upstreamOrgs": 9,
     "byOrg": {
-      "sugarlabs": 102,
+      "sugarlabs": 103,
       "kubescape": 39,
       "WasmEdge": 9,
       "besu-eth": 6,
@@ -399,7 +393,7 @@
     "byRepo": {
       "sugarlabs/musicblocks": 58,
       "kubescape/kubescape": 39,
-      "sugarlabs/musicblocks-v4": 32,
+      "sugarlabs/musicblocks-v4": 33,
       "parthdagia05/schemago": 13,
       "sugarlabs/www-v2": 12,
       "parthdagia05/mandate": 9,
